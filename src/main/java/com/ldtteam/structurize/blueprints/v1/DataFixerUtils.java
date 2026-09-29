@@ -4,7 +4,8 @@ import com.mojang.datafixers.DSL.TypeReference;
 import com.mojang.serialization.Dynamic;
 import com.google.common.collect.Maps;
 import java.util.Map;
-import net.minecraft.util.datafix.ExtraDataFixUtils;
+import java.util.stream.Collectors;
+import net.minecraft.nbt.Tag;
 import com.mojang.datafixers.DataFixUtils;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
@@ -18,6 +19,29 @@ import net.minecraft.util.datafix.fixes.References;
 public class DataFixerUtils
 {
     /**
+     * Block-state tag builder. MC 26.3 removed ExtraDataFixUtils#blockState together with the
+     * vanilla fixes that used it; this is the same implementation (26.2).
+     */
+    private static Dynamic<?> blockState(final String id, final Map<String, String> properties)
+    {
+        final Dynamic<Tag> dynamic = new Dynamic<>(NbtOps.INSTANCE, new CompoundTag());
+        Dynamic<Tag> blockState = dynamic.set("Name", dynamic.createString(id));
+        if (!properties.isEmpty())
+        {
+            blockState = blockState.set("Properties",
+                dynamic.createMap(properties.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(entry -> dynamic.createString(entry.getKey()), entry -> dynamic.createString(entry.getValue())))));
+        }
+        return blockState;
+    }
+
+    private static Dynamic<?> blockState(final String id)
+    {
+        return blockState(id, Map.of());
+    }
+
+    /**
      * If the used datafixer is the vanilla one.
      */
     public static boolean isVanillaDF = DataFixers.getDataFixer() instanceof com.mojang.datafixers.DataFixerUpper;
@@ -26,28 +50,28 @@ public class DataFixerUtils
      * Legacy flower-pot block-entity to block-state mappings retained for pre-1.13 blueprint migration.
      */
     public static final Map<String, Dynamic<?>> FLOWER_POT_MAP = DataFixUtils.make(Maps.newHashMap(), map -> {
-        map.put("minecraft:air0", ExtraDataFixUtils.blockState("minecraft:flower_pot"));
-        map.put("minecraft:red_flower0", ExtraDataFixUtils.blockState("minecraft:potted_poppy"));
-        map.put("minecraft:red_flower1", ExtraDataFixUtils.blockState("minecraft:potted_blue_orchid"));
-        map.put("minecraft:red_flower2", ExtraDataFixUtils.blockState("minecraft:potted_allium"));
-        map.put("minecraft:red_flower3", ExtraDataFixUtils.blockState("minecraft:potted_azure_bluet"));
-        map.put("minecraft:red_flower4", ExtraDataFixUtils.blockState("minecraft:potted_red_tulip"));
-        map.put("minecraft:red_flower5", ExtraDataFixUtils.blockState("minecraft:potted_orange_tulip"));
-        map.put("minecraft:red_flower6", ExtraDataFixUtils.blockState("minecraft:potted_white_tulip"));
-        map.put("minecraft:red_flower7", ExtraDataFixUtils.blockState("minecraft:potted_pink_tulip"));
-        map.put("minecraft:red_flower8", ExtraDataFixUtils.blockState("minecraft:potted_oxeye_daisy"));
-        map.put("minecraft:yellow_flower0", ExtraDataFixUtils.blockState("minecraft:potted_dandelion"));
-        map.put("minecraft:sapling0", ExtraDataFixUtils.blockState("minecraft:potted_oak_sapling"));
-        map.put("minecraft:sapling1", ExtraDataFixUtils.blockState("minecraft:potted_spruce_sapling"));
-        map.put("minecraft:sapling2", ExtraDataFixUtils.blockState("minecraft:potted_birch_sapling"));
-        map.put("minecraft:sapling3", ExtraDataFixUtils.blockState("minecraft:potted_jungle_sapling"));
-        map.put("minecraft:sapling4", ExtraDataFixUtils.blockState("minecraft:potted_acacia_sapling"));
-        map.put("minecraft:sapling5", ExtraDataFixUtils.blockState("minecraft:potted_dark_oak_sapling"));
-        map.put("minecraft:red_mushroom0", ExtraDataFixUtils.blockState("minecraft:potted_red_mushroom"));
-        map.put("minecraft:brown_mushroom0", ExtraDataFixUtils.blockState("minecraft:potted_brown_mushroom"));
-        map.put("minecraft:deadbush0", ExtraDataFixUtils.blockState("minecraft:potted_dead_bush"));
-        map.put("minecraft:tallgrass2", ExtraDataFixUtils.blockState("minecraft:potted_fern"));
-        map.put("minecraft:cactus0", ExtraDataFixUtils.blockState("minecraft:potted_cactus"));
+        map.put("minecraft:air0", blockState("minecraft:flower_pot"));
+        map.put("minecraft:red_flower0", blockState("minecraft:potted_poppy"));
+        map.put("minecraft:red_flower1", blockState("minecraft:potted_blue_orchid"));
+        map.put("minecraft:red_flower2", blockState("minecraft:potted_allium"));
+        map.put("minecraft:red_flower3", blockState("minecraft:potted_azure_bluet"));
+        map.put("minecraft:red_flower4", blockState("minecraft:potted_red_tulip"));
+        map.put("minecraft:red_flower5", blockState("minecraft:potted_orange_tulip"));
+        map.put("minecraft:red_flower6", blockState("minecraft:potted_white_tulip"));
+        map.put("minecraft:red_flower7", blockState("minecraft:potted_pink_tulip"));
+        map.put("minecraft:red_flower8", blockState("minecraft:potted_oxeye_daisy"));
+        map.put("minecraft:yellow_flower0", blockState("minecraft:potted_dandelion"));
+        map.put("minecraft:sapling0", blockState("minecraft:potted_oak_sapling"));
+        map.put("minecraft:sapling1", blockState("minecraft:potted_spruce_sapling"));
+        map.put("minecraft:sapling2", blockState("minecraft:potted_birch_sapling"));
+        map.put("minecraft:sapling3", blockState("minecraft:potted_jungle_sapling"));
+        map.put("minecraft:sapling4", blockState("minecraft:potted_acacia_sapling"));
+        map.put("minecraft:sapling5", blockState("minecraft:potted_dark_oak_sapling"));
+        map.put("minecraft:red_mushroom0", blockState("minecraft:potted_red_mushroom"));
+        map.put("minecraft:brown_mushroom0", blockState("minecraft:potted_brown_mushroom"));
+        map.put("minecraft:deadbush0", blockState("minecraft:potted_dead_bush"));
+        map.put("minecraft:tallgrass2", blockState("minecraft:potted_fern"));
+        map.put("minecraft:cactus0", blockState("minecraft:potted_cactus"));
     });
 
     /**
@@ -57,9 +81,9 @@ public class DataFixerUtils
         for (int note = 0; note < 26; note++)
         {
             map.put("true" + note,
-                ExtraDataFixUtils.blockState("minecraft:note_block", Map.of("powered", "true", "note", String.valueOf(note))));
+                blockState("minecraft:note_block", Map.of("powered", "true", "note", String.valueOf(note))));
             map.put("false" + note,
-                ExtraDataFixUtils.blockState("minecraft:note_block", Map.of("powered", "false", "note", String.valueOf(note))));
+                blockState("minecraft:note_block", Map.of("powered", "false", "note", String.valueOf(note))));
         }
     });
 

@@ -607,7 +607,7 @@ public class ItemScanTool extends AbstractItemWithPosSelector implements IScroll
             player.playSound(SoundEvents.ENDERMAN_TELEPORT, 1.0F, 1.0F);
 
             final CommandSourceStack source = new CommandSourceStack(CommandSource.NULL, player.position(), Vec2.ZERO, serverLevel, PermissionSet.ALL_PERMISSIONS,
-                    player.getName().getString(), stack.getDisplayName(), serverLevel.getServer(), player);
+                    serverLevel.getServer(), player);
             final CommandDispatcher<CommandSourceStack> dispatcher = serverLevel.getServer().getCommands().getDispatcher();
             try
             {

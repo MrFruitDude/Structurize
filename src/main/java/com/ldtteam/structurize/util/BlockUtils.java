@@ -16,6 +16,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.BlockPos.MutableBlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -41,6 +42,9 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.*;
 import net.minecraft.world.level.levelgen.blending.Blender;
+import net.minecraft.world.level.levelgen.densityfunction.DensityVolume;
+import net.minecraft.world.level.levelgen.material.MaterialRuleContext;
+import net.minecraft.world.level.levelgen.material.rule.RuleEvaluator;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
@@ -201,7 +205,7 @@ public final class BlockUtils
      * @param  virtualBlocks if null use level instead for getting surrounding block states, fnc may should return null if virtual
      *                       block is not available
      * @return               the BlockState of the filler block.
-     * @see                  net.minecraft.data.worldgen.SurfaceRuleData for possible blockstates
+     * @see                  net.minecraft.world.level.levelgen.material.MaterialSystem#buildSurface for the vanilla evaluation
      */
     @Nullable
     public static BlockState getWorldgenBlock(final Level level, final BlockPos location, @Nullable final Function<BlockPos, BlockState> virtualBlocks)
@@ -213,16 +217,10 @@ public final class BlockUtils
             {
                 final NoiseGeneratorSettings generatorSettings = chunkGenerator.generatorSettings().value();
 
-                // VANILLA INLINE: look at usage of generatorSettings.surfaceRule()
+                // VANILLA INLINE: look at MaterialSystem#buildSurface (26.3 material rules replaced surface rules)
 
                 final ChunkAccess chunk = serverLevel.getChunk(location);
-                final SurfaceRules.Context ctx = new SurfaceRules.Context(serverLevel.getChunkSource().randomState().surfaceSystem(),
-                    serverLevel.getChunkSource().randomState(),
-                    chunk,
-                    chunk.getOrCreateNoiseChunk(c -> createNoiseChunk(serverLevel, chunkGenerator, c)),
-                    serverLevel.getBiomeManager()::getBiome,
-                    new WorldGenerationContext(chunkGenerator, serverLevel),
-                    null);
+                final RandomState randomState = serverLevel.getChunkSource().randomState();
 
                 final int locX = location.getX();
                 final int locY = location.getY();
@@ -266,10 +264,27 @@ public final class BlockUtils
 
                 stoneDepthBelow = locY - stoneDepthBelow + 1;
 
-                ctx.updateXZ(locX, locZ);
-                ctx.updateY(stoneDepthAbove, stoneDepthBelow, waterHeight, locY);
-
-                return generatorSettings.surfaceRule().apply(ctx).tryApply(locX, locY, locZ);
+                // A single-position volume, as vanilla's MaterialSystem#topMaterial uses; the rule only samples at this position.
+                final DensityVolume volume = new DensityVolume(1, 1, 1, locX, locY, locZ);
+                try (NoiseChunk noiseChunk = new NoiseChunk(randomState,
+                    Beardifier.forStructuresInChunk(serverLevel.structureManager(), chunk.getPos()),
+                    generatorSettings,
+                    createGlobalFluidPicker(generatorSettings),
+                    Blender.empty(),
+                    volume))
+                {
+                    final MaterialRuleContext ctx = new MaterialRuleContext(randomState.surfaceSystem(),
+                        randomState,
+                        volume,
+                        noiseChunk.cachingSamplers(),
+                        serverLevel.getBiomeManager()::getBiome,
+                        new WorldGenerationContext(chunkGenerator, serverLevel),
+                        null);
+                    final RuleEvaluator rule = generatorSettings.materialRule().value().compile(ctx);
+                    ctx.updateXZ(locX, locZ, surfaceGradient(chunk, locX, locZ, 1, 0), surfaceGradient(chunk, locX, locZ, 0, 1));
+                    ctx.updateY(stoneDepthAbove, stoneDepthBelow, waterHeight, locY);
+                    return rule.tryApply(locX, locY, locZ);
+                }
             }
             else if (generator instanceof FlatLevelSource chunkGenerator)
             {
@@ -285,19 +300,16 @@ public final class BlockUtils
         return null;
     }
 
-    private static NoiseChunk createNoiseChunk(
-        final ServerLevel serverLevel,
-        final NoiseBasedChunkGenerator chunkGenerator,
-        final ChunkAccess chunk)
+    /**
+     * Surface height gradient across the given column along one axis (VANILLA INLINE: MaterialSystem#getSurfaceGradientX/Z,
+     * using the live WORLD_SURFACE heightmap since worldgen heightmaps are gone from full chunks).
+     */
+    private static int surfaceGradient(final ChunkAccess chunk, final int blockX, final int blockZ, final int dx, final int dz)
     {
-        final NoiseGeneratorSettings settings = chunkGenerator.generatorSettings().value();
-        return NoiseChunk.forChunk(
-            chunk,
-            serverLevel.getChunkSource().randomState(),
-            Beardifier.forStructuresInChunk(serverLevel.structureManager(), chunk.getPos()),
-            settings,
-            createGlobalFluidPicker(settings),
-            Blender.empty());
+        final int x = SectionPos.sectionRelative(blockX);
+        final int z = SectionPos.sectionRelative(blockZ);
+        return chunk.getHeight(Heightmap.Types.WORLD_SURFACE, Math.min(x + dx, 15), Math.min(z + dz, 15))
+            - chunk.getHeight(Heightmap.Types.WORLD_SURFACE, Math.max(x - dx, 0), Math.max(z - dz, 0));
     }
 
     private static Aquifer.FluidPicker createGlobalFluidPicker(final NoiseGeneratorSettings settings)
@@ -344,7 +356,7 @@ public final class BlockUtils
             return Items.WHEAT_SEEDS;
         }
         // oh no... 
-        else if (block instanceof FarmlandBlock || block instanceof DirtPathBlock)
+        else if (block instanceof FarmlandBlock || block instanceof PathBlock)
         {
             return getItemFromBlock(Blocks.DIRT);
         }
@@ -588,7 +600,7 @@ public final class BlockUtils
                 newState = targetBlock.getStateForPlacement(new BlockPlaceContext(new UseOnContext(fakePlayer,
                     InteractionHand.MAIN_HAND,
                     new BlockHitResult(new Vec3(0, 0, 0),
-                        itemStack.getItem() instanceof BedItem ? Direction.UP : Direction.NORTH,
+                        itemStack.getItem() instanceof BlockItem blockItem && blockItem.getBlock() instanceof BedBlock ? Direction.UP : Direction.NORTH,
                         here,
                         true))));
 
@@ -786,7 +798,7 @@ public final class BlockUtils
 
     public static boolean canBlockSurviveWithoutSupport(final Block block)
     {
-        if (block instanceof FarmlandBlock || block instanceof DirtPathBlock)
+        if (block instanceof FarmlandBlock || block instanceof PathBlock)
         {
             return true;
         }

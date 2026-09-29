@@ -271,7 +271,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
     {
         if (getFocus() != null) return super.onUnhandledKeyTyped(event);
 
-        final InputConstants.Key inputKey = InputConstants.Type.KEYSYM.getOrCreate(event.key());
+        final InputConstants.Key inputKey = InputConstants.Type.KEYBOARD.getOrCreate(event.key());
 
         if (ModKeyMappings.MOVE_FORWARD.get().isActiveAndMatches(inputKey))
         {

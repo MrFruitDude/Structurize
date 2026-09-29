@@ -992,7 +992,7 @@ public class WorldRenderMacros extends UiRenderMacros
 
             matrixStack.pushPose();
             matrixStack.translate(renderPos.getX() + 0.5d, renderPos.getY() + 0.6d, renderPos.getZ() + 0.5d);
-            matrixStack.mulPose(erm.camera.rotation());
+            matrixStack.rotate(erm.camera.rotation());
             matrixStack.scale(-0.014f, -0.014f, 0.014f);
 
             final float backgroundTextOpacity = 0f;

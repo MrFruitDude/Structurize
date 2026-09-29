@@ -17,7 +17,7 @@ import net.minecraft.core.particles.ExplosionParticleInfo;
 import net.minecraft.util.random.WeightedList;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.util.AbortableIterationConsumer.Continuation;
+import net.minecraft.util.Continuation;
 import net.minecraft.world.TickRateManager;
 import net.minecraft.world.clock.ClockManager;
 import net.minecraft.world.attribute.EnvironmentAttributeSystem;
@@ -27,7 +27,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.crafting.RecipeManager;
-import net.minecraft.world.item.alchemy.PotionBrewing;
 import net.minecraft.world.item.crafting.RecipeAccess;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.ExplosionDamageCalculator;
@@ -38,7 +37,6 @@ import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.FuelValues;
 import net.minecraft.world.level.block.entity.TickingBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.border.WorldBorder;
@@ -503,18 +501,6 @@ public class FakeLevel extends Level
     public EnvironmentAttributeSystem environmentAttributes()
     {
         return realLevel().environmentAttributes();
-    }
-
-    @Override
-    public PotionBrewing potionBrewing()
-    {
-        return realLevel().potionBrewing();
-    }
-
-    @Override
-    public FuelValues fuelValues()
-    {
-        return realLevel().fuelValues();
     }
 
     @Override

@@ -41,8 +41,8 @@ public class LifecycleSubscriber
     public static void onServerDatagen(@NotNull final GatherDataEvent.Server event)
     {
         final DataGenerator generator = event.getGenerator();
-        event.addProvider(new BlockEntityTagProvider(event.getGenerator().getPackOutput(), Registries.BLOCK_ENTITY_TYPE, event.getLookupProvider()));
-        event.addProvider(new BlockTagProvider(event.getGenerator().getPackOutput(), Registries.BLOCK, event.getLookupProvider()));
+        event.addProvider(new BlockEntityTagProvider(event.getGenerator().getPackOutput(), Registries.BLOCK_ENTITY_TYPE, event.getReloadableLookupProvider()));
+        event.addProvider(new BlockTagProvider(event.getGenerator().getPackOutput(), Registries.BLOCK, event.getReloadableLookupProvider()));
     }
 
     @SubscribeEvent
@@ -51,7 +51,7 @@ public class LifecycleSubscriber
         final DataGenerator generator = event.getGenerator();
         if (event instanceof GatherDataEvent.Client)
         {
-            event.addProvider(new EntityTagProvider(event.getGenerator().getPackOutput(), Registries.ENTITY_TYPE, event.getLookupProvider()));
+            event.addProvider(new EntityTagProvider(event.getGenerator().getPackOutput(), Registries.ENTITY_TYPE, event.getReloadableLookupProvider()));
         }
     }
 }

@@ -158,7 +158,7 @@ public class BlueprintUtil
 
         if (anchorPos.isPresent())
         {
-            BlockPos relativeAnchorPos = new BlockPos(anchorPos.get().subtract(pos));
+            BlockPos relativeAnchorPos = anchorPos.get().subtract(pos);
 
             schem.setCachePrimaryOffset(relativeAnchorPos);
         }

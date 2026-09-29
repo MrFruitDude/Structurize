@@ -612,6 +612,13 @@ public class BlueprintRenderer implements AutoCloseable
         }
 
         @Override
+        public VertexConsumer setUv3(final float u, final float v)
+        {
+            delegate.setUv3(u, v);
+            return this;
+        }
+
+        @Override
         public VertexConsumer setNormal(final float x, final float y, final float z)
         {
             delegate.setNormal(x, y, z);

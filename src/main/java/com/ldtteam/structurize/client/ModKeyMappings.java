@@ -12,7 +12,7 @@ import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.client.settings.KeyModifier;
 import net.neoforged.neoforge.common.util.Lazy;
 import org.jetbrains.annotations.NotNull;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLScancode;
 
 public class ModKeyMappings
 {
@@ -42,31 +42,31 @@ public class ModKeyMappings
      * Teleport using active Scan Tool
      */
     public static final Lazy<KeyMapping> TELEPORT = Lazy.of(() -> new KeyMapping("key.structurize.teleport",
-            KeyConflictContext.IN_GAME, InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), CATEGORY));
+            KeyConflictContext.IN_GAME, InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), CATEGORY));
 
     /**
      * Move build previews
      */
     public static final Lazy<KeyMapping> MOVE_FORWARD = Lazy.of(() -> new KeyMapping("key.structurize.move_forward",
-            BLUEPRINT_WINDOW, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UP, CATEGORY));
+            BLUEPRINT_WINDOW, InputConstants.Type.KEYBOARD, InputConstants.KEY_UP, CATEGORY));
     public static final Lazy<KeyMapping> MOVE_BACK = Lazy.of(() -> new KeyMapping("key.structurize.move_back",
-            BLUEPRINT_WINDOW, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_DOWN, CATEGORY));
+            BLUEPRINT_WINDOW, InputConstants.Type.KEYBOARD, InputConstants.KEY_DOWN, CATEGORY));
     public static final Lazy<KeyMapping> MOVE_LEFT = Lazy.of(() -> new KeyMapping("key.structurize.move_left",
-            BLUEPRINT_WINDOW, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT, CATEGORY));
+            BLUEPRINT_WINDOW, InputConstants.Type.KEYBOARD, InputConstants.KEY_LEFT, CATEGORY));
     public static final Lazy<KeyMapping> MOVE_RIGHT = Lazy.of(() -> new KeyMapping("key.structurize.move_right",
-            BLUEPRINT_WINDOW, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT, CATEGORY));
+            BLUEPRINT_WINDOW, InputConstants.Type.KEYBOARD, InputConstants.KEY_RIGHT, CATEGORY));
     public static final Lazy<KeyMapping> MOVE_UP = Lazy.of(() -> new KeyMapping("key.structurize.move_up",
-            BLUEPRINT_WINDOW, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_KP_ADD, CATEGORY));
+            BLUEPRINT_WINDOW, InputConstants.Type.KEYBOARD, InputConstants.KEY_ADD, CATEGORY));
     public static final Lazy<KeyMapping> MOVE_DOWN = Lazy.of(() -> new KeyMapping("key.structurize.move_down",
-            BLUEPRINT_WINDOW, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_KP_SUBTRACT, CATEGORY));
+            BLUEPRINT_WINDOW, InputConstants.Type.KEYBOARD, SDLScancode.SDL_SCANCODE_KP_MINUS, CATEGORY));
     public static final Lazy<KeyMapping> ROTATE_CW = Lazy.of(() -> new KeyMapping("key.structurize.rotate_cw",
-            BLUEPRINT_WINDOW, KeyModifier.SHIFT, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT, CATEGORY));
+            BLUEPRINT_WINDOW, KeyModifier.SHIFT, InputConstants.Type.KEYBOARD, InputConstants.KEY_RIGHT, CATEGORY));
     public static final Lazy<KeyMapping> ROTATE_CCW = Lazy.of(() -> new KeyMapping("key.structurize.rotate_ccw",
-            BLUEPRINT_WINDOW, KeyModifier.SHIFT, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT, CATEGORY));
+            BLUEPRINT_WINDOW, KeyModifier.SHIFT, InputConstants.Type.KEYBOARD, InputConstants.KEY_LEFT, CATEGORY));
     public static final Lazy<KeyMapping> MIRROR = Lazy.of(() -> new KeyMapping("key.structurize.mirror",
-            BLUEPRINT_WINDOW, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M, CATEGORY));
+            BLUEPRINT_WINDOW, InputConstants.Type.KEYBOARD, InputConstants.KEY_M, CATEGORY));
     public static final Lazy<KeyMapping> PLACE = Lazy.of(() -> new KeyMapping("key.structurize.place",
-            BLUEPRINT_WINDOW, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_ENTER, CATEGORY));
+            BLUEPRINT_WINDOW, InputConstants.Type.KEYBOARD, InputConstants.KEY_RETURN, CATEGORY));
 
     /**
      * Register key mappings

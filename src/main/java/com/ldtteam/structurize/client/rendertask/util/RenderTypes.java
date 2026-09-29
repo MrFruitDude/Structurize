@@ -1,12 +1,12 @@
 package com.ldtteam.structurize.client.rendertask.util;
 
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
@@ -31,7 +31,7 @@ public final class RenderTypes
 
     public static final RenderType LINES_OUTSIDE_BLOCKS = positionColor(
         "structurize:lines_outside_blocks",
-        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.TRANSLUCENT,
         CompareOp.LESS_THAN_OR_EQUAL,
         false,
@@ -40,7 +40,7 @@ public final class RenderTypes
 
     public static final RenderType LINES_INSIDE_BLOCKS = positionColor(
         "structurize:lines_inside_blocks",
-        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.TRANSLUCENT,
         CompareOp.GREATER_THAN,
         false,
@@ -49,7 +49,7 @@ public final class RenderTypes
 
     public static final RenderType GLINT_LINES = positionColor(
         "structurize_glint_lines",
-        com.mojang.blaze3d.PrimitiveTopology.DEBUG_LINES,
+        com.mojang.renderpearl.api.pipeline.PrimitiveTopology.DEBUG_LINES,
         BlendFunction.ADDITIVE,
         CompareOp.ALWAYS_PASS,
         false,
@@ -58,7 +58,7 @@ public final class RenderTypes
 
     public static final RenderType GLINT_LINES_WITH_WIDTH = positionColor(
         "structurize_glint_lines_with_width",
-        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.ADDITIVE,
         CompareOp.ALWAYS_PASS,
         true,
@@ -67,7 +67,7 @@ public final class RenderTypes
 
     public static final RenderType LINES = positionColor(
         "structurize_lines",
-        com.mojang.blaze3d.PrimitiveTopology.DEBUG_LINES,
+        com.mojang.renderpearl.api.pipeline.PrimitiveTopology.DEBUG_LINES,
         BlendFunction.TRANSLUCENT,
         CompareOp.LESS_THAN_OR_EQUAL,
         false,
@@ -76,7 +76,7 @@ public final class RenderTypes
 
     public static final RenderType LINES_WITH_WIDTH = positionColor(
         "structurize_lines_with_width",
-        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.TRANSLUCENT,
         CompareOp.LESS_THAN_OR_EQUAL,
         true,
@@ -85,7 +85,7 @@ public final class RenderTypes
 
     public static final RenderType COLORED_TRIANGLES = positionColor(
         "structurize_colored_triangles",
-        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.TRANSLUCENT,
         CompareOp.LESS_THAN_OR_EQUAL,
         true,
@@ -94,7 +94,7 @@ public final class RenderTypes
 
     public static final RenderType COLORED_TRIANGLES_NC_ND = positionColor(
         "structurize_colored_triangles_nc_nd",
-        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.TRANSLUCENT,
         CompareOp.ALWAYS_PASS,
         false,
@@ -108,7 +108,7 @@ public final class RenderTypes
             .withFragmentShader("core/position_tex")
             .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
             .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
-            .withPrimitiveTopology(com.mojang.blaze3d.PrimitiveTopology.QUADS)
+            .withPrimitiveTopology(com.mojang.renderpearl.api.pipeline.PrimitiveTopology.QUADS)
             .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
             .build();
         return RenderType.create(
@@ -117,7 +117,7 @@ public final class RenderTypes
     });
 
     private static RenderType positionColor(final String name,
-        final com.mojang.blaze3d.PrimitiveTopology mode,
+        final com.mojang.renderpearl.api.pipeline.PrimitiveTopology mode,
         final BlendFunction blendFunction,
         final CompareOp depthTest,
         final boolean writeDepth,

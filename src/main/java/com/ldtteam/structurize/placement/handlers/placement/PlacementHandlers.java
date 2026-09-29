@@ -810,7 +810,7 @@ public final class PlacementHandlers
         @Override
         public boolean canHandle(final Level world, final BlockPos pos, final BlockState blockState)
         {
-            return blockState.getBlock() instanceof DirtPathBlock;
+            return blockState.getBlock() instanceof PathBlock;
         }
 
         @Override
