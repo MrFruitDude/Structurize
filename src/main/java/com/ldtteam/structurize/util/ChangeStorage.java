@@ -7,6 +7,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnRequest;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -99,7 +101,10 @@ public class ChangeStorage
      */
     public void addEntities(final List<Entity> list)
     {
-        removedEntities.addAll(list.stream().map(Entity::serializeNBT).collect(Collectors.toList()));
+        removedEntities.addAll(list.stream()
+            .map(entity -> EntityNbtHelper.save(entity, entity.level().registryAccess()))
+            .filter(Objects::nonNull)
+            .toList());
     }
 
     /**
@@ -165,18 +170,18 @@ public class ChangeStorage
 
         for (final CompoundTag data : removedEntities)
         {
-            final Optional<EntityType<?>> type = EntityType.by(data);
-            if (type.isPresent())
+            final Entity entity = EntityType.loadEntityRecursive(
+                data,
+                world,
+                new EntitySpawnRequest(EntitySpawnReason.LOAD, false),
+                loaded -> loaded);
+
+            if (entity != null)
             {
-                final Entity entity = type.get().create(world);
-                if (entity != null)
+                world.addFreshEntity(entity);
+                if (undoStorage != null)
                 {
-                    entity.deserializeNBT(data);
-                    world.addFreshEntity(entity);
-                    if (undoStorage != null)
-                    {
-                        undoStorage.addedEntities.add(entity);
-                    }
+                    undoStorage.addedEntities.add(entity);
                 }
             }
         }

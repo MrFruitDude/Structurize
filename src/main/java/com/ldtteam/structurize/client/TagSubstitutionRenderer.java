@@ -1,119 +1,132 @@
 package com.ldtteam.structurize.client;
 
 import com.ldtteam.structurize.blockentities.BlockEntityTagSubstitution;
-import com.ldtteam.structurize.blueprints.v1.Blueprint;
-import com.ldtteam.structurize.client.fakelevel.BlueprintBlockAccess;
-import com.ldtteam.structurize.items.ItemTagSubstitution;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.block.BlockRenderDispatcher;
-import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.ItemDisplayContext;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraftforge.client.ForgeRenderTypes;
-import net.minecraftforge.client.model.data.ModelData;
+import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
+import net.minecraft.world.phys.Vec3;
 
-/**
- * Tag anchor renderer; renders replacement block model inside of anchor "overlay" model.
- */
-public class TagSubstitutionRenderer extends BlockEntityWithoutLevelRenderer implements BlockEntityRenderer<BlockEntityTagSubstitution>
+public class TagSubstitutionRenderer implements BlockEntityRenderer<BlockEntityTagSubstitution, TagSubstitutionRenderer.State>
 {
-    private static TagSubstitutionRenderer INSTANCE;
+    private static TagSubstitutionRenderer instance;
 
     public static TagSubstitutionRenderer getInstance()
     {
-        return INSTANCE;
+        return instance;
     }
-
 
     private final BlockEntityRendererProvider.Context context;
 
     public TagSubstitutionRenderer(@NotNull final BlockEntityRendererProvider.Context context)
     {
-        super(context.getBlockEntityRenderDispatcher(), context.getModelSet());
-
-        INSTANCE = this;
+        instance = this;
         this.context = context;
     }
 
     @Override
-    public void render(@NotNull final BlockEntityTagSubstitution entity,
-                       final float partialTick,
-                       @NotNull final PoseStack poseStack,
-                       @NotNull final MultiBufferSource buffers,
-                       final int packedLight,
-                       final int packedOverlay)
+    public State createRenderState()
     {
-        final RenderType renderType = ForgeRenderTypes.ITEM_LAYERED_TRANSLUCENT.get();
-
-        render(entity.getReplacement(), entity.getTilePos(), partialTick, poseStack, buffers, packedLight, packedOverlay, renderType);
+        return new State();
     }
 
     @Override
-    public void renderByItem(@NotNull final ItemStack stack,
-                             @NotNull final ItemDisplayContext transformType,
-                             @NotNull final PoseStack poseStack,
-                             @NotNull final MultiBufferSource buffers,
-                             final int packedLight,
-                             final int packedOverlay)
+    public void extractRenderState(@NotNull final BlockEntityTagSubstitution entity,
+        @NotNull final State state,
+        final float partialTick,
+        @NotNull final Vec3 cameraPosition,
+        final ModelFeatureRenderer.CrumblingOverlay breakProgress)
     {
-        final RenderType renderType = ForgeRenderTypes.ITEM_LAYERED_TRANSLUCENT.get();
-
-        if (stack.getItem() instanceof ItemTagSubstitution anchor)
-        {
-            this.context.getBlockRenderDispatcher().renderSingleBlock(anchor.getBlock().defaultBlockState(),
-                    poseStack, buffers, packedLight, packedOverlay, ModelData.EMPTY, renderType);
-
-            render(anchor.getAbsorbedBlock(stack), BlockPos.ZERO, 0, poseStack, buffers, packedLight, packedOverlay, renderType);
-        }
+        BlockEntityRenderState.extractBase(entity, state, breakProgress);
+        state.partialTick = partialTick;
+        state.replacement = entity.getReplacement();
+        state.tilePos = entity.getTilePos();
     }
 
-    private void render(@NotNull final BlockEntityTagSubstitution.ReplacementBlock replacement,
-                        @NotNull final BlockPos pos,
-                        final float partialTick,
-                        @NotNull PoseStack poseStack,
-                        @NotNull MultiBufferSource buffers,
-                        final int packedLight,
-                        final int packedOverlay,
-                        @NotNull final RenderType renderType)
+    @Override
+    public void submit(@NotNull final State state,
+        @NotNull final PoseStack poseStack,
+        @NotNull final SubmitNodeCollector collector,
+        @NotNull final CameraRenderState camera)
     {
-        if (!replacement.isEmpty())
+        if (state.replacement == null || state.tilePos == null || state.replacement.isEmpty())
         {
-            poseStack.pushPose();
-            poseStack.scale(0.98f,0.98f,0.98f);
-            poseStack.translate(0.01f, 0.01f, 0.01f);
+            return;
+        }
 
-            final BlockRenderDispatcher dispatcher = this.context.getBlockRenderDispatcher();
+        poseStack.pushPose();
+        poseStack.scale(0.98F, 0.98F, 0.98F);
+        poseStack.translate(0.01F, 0.01F, 0.01F);
 
-            final BlockEntity replacementEntity = replacement.getBlockEntity(pos);
-            if (replacementEntity != null)
+        final BlockEntity replacementEntity = state.replacement.getBlockEntity(state.tilePos);
+        if (replacementEntity == null)
+        {
+            submitBlockModel(
+                state.replacement.getBlockState(),
+                state.lightCoords,
+                net.minecraft.client.renderer.rendertype.RenderTypes.translucentMovingBlock(),
+                poseStack,
+                collector);
+        }
+        else
+        {
+            final BlockEntityRenderState nestedState = context.blockEntityRenderDispatcher()
+                .tryExtractRenderState(replacementEntity, state.partialTick, null, false);
+            if (nestedState != null)
             {
-                // seems a little silly to create a blueprint, but the entityDispatcher won't render without a level...
-                final Blueprint blueprint = replacement.createBlueprint();
-                final BlueprintBlockAccess blockAccess = new BlueprintBlockAccess(blueprint);
-                replacementEntity.setLevel(blockAccess);
-
-                final BlockEntityRenderDispatcher entityDispatcher = this.context.getBlockEntityRenderDispatcher();
-                if (replacement.getBlockState().getRenderShape() == RenderShape.MODEL)
-                {
-                    dispatcher.renderSingleBlock(replacement.getBlockState(), poseStack, buffers, packedLight, packedOverlay, replacementEntity.getModelData(), renderType);
-                }
-                entityDispatcher.render(replacementEntity, partialTick, poseStack, buffers);
+                context.blockEntityRenderDispatcher().submit(nestedState, poseStack, collector, camera);
             }
             else
             {
-                dispatcher.renderSingleBlock(replacement.getBlockState(), poseStack, buffers, packedLight, packedOverlay, ModelData.EMPTY, renderType);
+                submitBlockModel(
+                    state.replacement.getBlockState(),
+                    state.lightCoords,
+                    net.minecraft.client.renderer.rendertype.RenderTypes.translucentMovingBlock(),
+                    poseStack,
+                    collector);
             }
-
-            poseStack.popPose();
         }
+
+        poseStack.popPose();
+    }
+
+    private static void submitBlockModel(final BlockState blockState,
+        final int packedLight,
+        @NotNull final RenderType renderType,
+        @NotNull final PoseStack poseStack,
+        @NotNull final SubmitNodeCollector collector)
+    {
+        if (blockState.getRenderShape() != RenderShape.MODEL)
+        {
+            return;
+        }
+
+        final BlockStateModel model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(blockState);
+        final List<BlockStateModelPart> parts = new ArrayList<>();
+        model.collectParts(BlockAndTintGetter.EMPTY, BlockPos.ZERO, blockState, RandomSource.create(42L), parts);
+        collector.submitBlockModel(poseStack, renderType, parts, new int[0], packedLight, 0, 0);
+    }
+
+    public static class State extends BlockEntityRenderState
+    {
+        private float partialTick;
+        private BlockEntityTagSubstitution.ReplacementBlock replacement;
+        private BlockPos tilePos;
     }
 }

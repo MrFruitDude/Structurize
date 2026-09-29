@@ -3,20 +3,22 @@ package com.ldtteam.structurize.config;
 import com.ldtteam.structurize.api.util.constant.Constants;
 import com.ldtteam.structurize.util.LanguageHandler;
 import net.minecraft.server.TickTask;
-import net.minecraftforge.common.ForgeConfigSpec.BooleanValue;
-import net.minecraftforge.common.ForgeConfigSpec.Builder;
-import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
-import net.minecraftforge.common.ForgeConfigSpec.DoubleValue;
-import net.minecraftforge.common.ForgeConfigSpec.EnumValue;
-import net.minecraftforge.common.ForgeConfigSpec.IntValue;
-import net.minecraftforge.common.ForgeConfigSpec.LongValue;
-import net.minecraftforge.common.util.LogicalSidedProvider;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.common.ModConfigSpec.BooleanValue;
+import net.neoforged.neoforge.common.ModConfigSpec.Builder;
+import net.neoforged.neoforge.common.ModConfigSpec.ConfigValue;
+import net.neoforged.neoforge.common.ModConfigSpec.DoubleValue;
+import net.neoforged.neoforge.common.ModConfigSpec.EnumValue;
+import net.neoforged.neoforge.common.ModConfigSpec.IntValue;
+import net.neoforged.neoforge.common.ModConfigSpec.LongValue;
+import net.neoforged.neoforge.internal.NeoForgeProxy;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -151,20 +153,21 @@ public abstract class AbstractConfiguration
     {
         private final ConfigListener<T> listener;
         private final ConfigValue<T> forgeConfig;
-        
+
+        @Nullable
         private T lastValue;
-        
+
         private ConfigWatcher(final ConfigListener<T> listener, final ConfigValue<T> forgeConfig)
         {
             this.listener = listener;
             this.forgeConfig = forgeConfig;
         }
 
-        boolean sameForgeConfig(final ConfigValue<?> other)
+        boolean isSameForgeConfig(final ConfigValue<?> other)
         {
             return other == forgeConfig;
         }
-        
+
         synchronized void cacheLastValue()
         {
             lastValue = forgeConfig.get();
@@ -174,10 +177,17 @@ public abstract class AbstractConfiguration
         {
             final T newValue = forgeConfig.get();
 
-            if (!newValue.equals(lastValue))
+            if (!Objects.equals(newValue, lastValue))
             {
-                LogicalSidedProvider.WORKQUEUE.get(FMLEnvironment.dist.isClient() ? LogicalSide.CLIENT : LogicalSide.SERVER)
-                    .tell(new TickTask(0, () -> listener.onChange(lastValue, newValue)));
+                final Runnable changeEvent = () -> listener.onChange(lastValue, newValue);
+                if (FMLEnvironment.getDist().isClient())
+                {
+                    NeoForgeProxy.INSTANCE.getClientExecutor().schedule(changeEvent);
+                }
+                else
+                {
+                    ServerLifecycleHooks.getCurrentServer().schedule(new TickTask(0, changeEvent));
+                }
                 lastValue = newValue;
             }
         }

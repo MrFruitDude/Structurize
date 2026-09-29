@@ -3,12 +3,14 @@ package com.ldtteam.structurize.items;
 import com.ldtteam.structurize.api.util.BlockPosUtil;
 import com.ldtteam.structurize.blockentities.interfaces.IBlueprintDataProviderBE;
 import com.ldtteam.structurize.client.gui.WindowTagTool;
+import com.ldtteam.structurize.util.ItemStackNbtHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.InteractionResult.Success;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -34,7 +36,7 @@ public class ItemTagTool extends AbstractItemWithPosSelector
      */
     public ItemTagTool()
     {
-        this(new Item.Properties().durability(0).setNoRepair().rarity(Rarity.UNCOMMON));
+        this(new Item.Properties().durability(0).rarity(Rarity.UNCOMMON));
     }
 
     /**
@@ -56,12 +58,12 @@ public class ItemTagTool extends AbstractItemWithPosSelector
     @Override
     public InteractionResult onAirRightClick(final BlockPos start, final BlockPos end, final Level worldIn, final Player playerIn, final ItemStack itemStack)
     {
-        if (worldIn.isClientSide)
+        if (worldIn.isClientSide())
         {
             final BlockPos anchorPos = getAnchorPos(itemStack);
             if (anchorPos == null)
             {
-                playerIn.displayClientMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.noanchor"), false);
+                playerIn.sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.noanchor"));
                 return InteractionResult.FAIL;
             }
 
@@ -79,7 +81,7 @@ public class ItemTagTool extends AbstractItemWithPosSelector
      */
     private BlockPos getAnchorPos(final ItemStack stack)
     {
-        final CompoundTag itemCompound = stack.getOrCreateTag();
+        final CompoundTag itemCompound = ItemStackNbtHelper.getOrCreateCustomTag(stack);
 
         if (itemCompound.contains(TAG_ANCHOR_POS))
         {
@@ -97,24 +99,25 @@ public class ItemTagTool extends AbstractItemWithPosSelector
      */
     private String getCurrentTag(final ItemStack stack)
     {
-        if (stack.getOrCreateTag().contains(TAG_CURRENT_TAG))
+        if (ItemStackNbtHelper.getOrCreateCustomTag(stack).contains(TAG_CURRENT_TAG))
         {
-            return stack.getOrCreateTag().getString(TAG_CURRENT_TAG);
+            return ItemStackNbtHelper.getOrCreateCustomTag(stack).getStringOr(TAG_CURRENT_TAG, "");
         }
         return "";
     }
 
     @Override
-    public InteractionResultHolder<ItemStack> use(Level worldIn, Player playerIn, InteractionHand handIn)
+    public InteractionResult use(Level worldIn, Player playerIn, InteractionHand handIn)
     {
-        return new InteractionResultHolder<>(
-          onAirRightClick(
+        final InteractionResult result = onAirRightClick(
             null,
             null,
             worldIn,
             playerIn,
-            playerIn.getItemInHand(handIn)),
-          playerIn.getItemInHand(handIn));
+            playerIn.getItemInHand(handIn));
+        return result instanceof final Success success
+            ? success.heldItemTransformedTo(playerIn.getItemInHand(handIn))
+            : result;
     }
 
     @Override
@@ -131,10 +134,10 @@ public class ItemTagTool extends AbstractItemWithPosSelector
             BlockEntity te = context.getLevel().getBlockEntity(context.getClickedPos());
             if (te instanceof IBlueprintDataProviderBE)
             {
-                BlockPosUtil.writeToNBT(context.getItemInHand().getOrCreateTag(), TAG_ANCHOR_POS, context.getClickedPos());
+                BlockPosUtil.writeToNBT(ItemStackNbtHelper.getOrCreateCustomTag(context.getItemInHand()), TAG_ANCHOR_POS, context.getClickedPos());
                 if (context.getLevel().isClientSide())
                 {
-                    context.getPlayer().displayClientMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.anchorsaved"), false);
+                    context.getPlayer().sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.anchorsaved"));
                 }
                 return InteractionResult.SUCCESS;
             }
@@ -142,7 +145,7 @@ public class ItemTagTool extends AbstractItemWithPosSelector
             {
                 if (context.getLevel().isClientSide())
                 {
-                    context.getPlayer().displayClientMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.anchor.notvalid"), false);
+                    context.getPlayer().sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.anchor.notvalid"));
                 }
                 return InteractionResult.FAIL;
             }
@@ -152,8 +155,17 @@ public class ItemTagTool extends AbstractItemWithPosSelector
     }
 
     @Override
-    public boolean canAttackBlock(final BlockState state, final Level worldIn, final BlockPos pos, final Player player)
+    public boolean canDestroyBlock(final ItemStack selectedStack,
+        final BlockState state,
+        final Level worldIn,
+        final BlockPos pos,
+        final LivingEntity entity)
     {
+        if (!(entity instanceof final Player player))
+        {
+            return super.canDestroyBlock(selectedStack, state, worldIn, pos, entity);
+        }
+
         final ItemStack stack = player.getMainHandItem();
         if (stack.getItem() != ModItems.tagTool.get())
         {
@@ -165,13 +177,13 @@ public class ItemTagTool extends AbstractItemWithPosSelector
 
         if (anchorPos == null)
         {
-            player.displayClientMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.noanchor"), false);
+            player.sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.noanchor"));
             return false;
         }
 
         if (currentTag.isEmpty())
         {
-            player.displayClientMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.notag"), false);
+            player.sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.notag"));
             return false;
         }
 
@@ -181,8 +193,8 @@ public class ItemTagTool extends AbstractItemWithPosSelector
         final BlockEntity te = worldIn.getBlockEntity(anchorPos);
         if (!(te instanceof IBlueprintDataProviderBE))
         {
-            player.displayClientMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.anchor.notvalid"), false);
-            stack.getOrCreateTag().remove(TAG_ANCHOR_POS);
+            player.sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.anchor.notvalid"));
+            ItemStackNbtHelper.getOrCreateCustomTag(stack).remove(TAG_ANCHOR_POS);
             return false;
         }
 
@@ -194,9 +206,9 @@ public class ItemTagTool extends AbstractItemWithPosSelector
             ((IBlueprintDataProviderBE) te).addTag(relativePos, currentTag);
             if (worldIn.isClientSide())
             {
-                player.displayClientMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.addtag",
+                player.sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.addtag",
                         currentTag,
-                        worldIn.getBlockState(pos).getBlock().getName()), false);
+                        worldIn.getBlockState(pos).getBlock().getName()));
             }
         }
         else
@@ -204,9 +216,9 @@ public class ItemTagTool extends AbstractItemWithPosSelector
             ((IBlueprintDataProviderBE) te).removeTag(relativePos, currentTag);
             if (worldIn.isClientSide())
             {
-                player.displayClientMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.removed",
+                player.sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.removed",
                         currentTag,
-                        worldIn.getBlockState(pos).getBlock().getName()), false);
+                        worldIn.getBlockState(pos).getBlock().getName()));
             }
         }
 

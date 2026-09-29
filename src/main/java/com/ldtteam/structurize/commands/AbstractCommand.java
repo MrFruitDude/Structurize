@@ -15,7 +15,7 @@ import com.mojang.brigadier.exceptions.CommandExceptionType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands.CommandSelection;
-import net.minecraft.util.Tuple;
+import com.ldtteam.structurize.api.util.Tuple;
 
 /**
  * Interface for all commands

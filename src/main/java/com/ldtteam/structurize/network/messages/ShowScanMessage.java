@@ -5,8 +5,8 @@ import com.ldtteam.structurize.client.rendertask.tasks.BoxPreviewData;
 import com.ldtteam.structurize.client.rendertask.tasks.BoxPreviewRenderTask;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -65,7 +65,7 @@ public class ShowScanMessage implements IMessage
     }
 
     @Override
-    public void onExecute(@NotNull final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(@NotNull final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         RenderTaskManager.addRenderTask("scan", new BoxPreviewRenderTask("scan", this.box, 60 * 10));
     }

@@ -1,7 +1,7 @@
 package com.ldtteam.structurize.client.rendertask.task;
 
 import com.ldtteam.structurize.client.rendercontext.WorldEventRenderContext;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 public interface IRenderTask extends IClientTask
 {
@@ -15,5 +15,5 @@ public interface IRenderTask extends IClientTask
      *
      * @return true if rendering active for this stage
      */
-    boolean shouldRenderIn(RenderLevelStageEvent.Stage renderStage);
+    boolean shouldRenderIn(Class<? extends RenderLevelStageEvent> renderStage);
 }

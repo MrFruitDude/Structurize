@@ -23,11 +23,16 @@ import com.ldtteam.structurize.util.ScanToolData;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -36,6 +41,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -212,9 +218,9 @@ public class WindowScan extends AbstractWindowSkeleton
                     heightOffset,
                     minDistToBlocks));
         }
-        catch (Exception e)
+        catch (NumberFormatException e)
         {
-            Minecraft.getInstance().player.displayClientMessage(Component.literal("Invalid Number"), false);
+            Minecraft.getInstance().player.sendSystemMessage(Component.literal("Invalid Number"));
         }
         close();
     }
@@ -361,8 +367,11 @@ public class WindowScan extends AbstractWindowSkeleton
     }
 
     @Override
-    public boolean onUnhandledKeyTyped(final int ch, final int key)
+    public boolean onCharactedEvent(final CharacterEvent event)
     {
+        final char ch = event.codepoint() >= Character.MIN_VALUE && event.codepoint() <= Character.MAX_VALUE
+            ? (char) event.codepoint()
+            : '\0';
         if (ch >= '0' && ch <= '9')
         {
             updateBounds();
@@ -372,7 +381,7 @@ public class WindowScan extends AbstractWindowSkeleton
             return true;
         }
 
-        return super.onUnhandledKeyTyped(ch, key);
+        return super.onCharactedEvent(event);
     }
 
     private void loadSlot()
@@ -424,7 +433,7 @@ public class WindowScan extends AbstractWindowSkeleton
         }
         catch (final NumberFormatException e)
         {
-            Minecraft.getInstance().player.displayClientMessage(Component.literal("Invalid Number"), false);
+            Minecraft.getInstance().player.sendSystemMessage(Component.literal("Invalid Number"));
             return;
         }
 
@@ -454,14 +463,18 @@ public class WindowScan extends AbstractWindowSkeleton
 
         final ScanToolData.Slot slot = data.getCurrentSlotData();
 
-        final List<Entity> list = world.getEntitiesOfClass(Entity.class, new AABB(slot.getBox().getPos1(), slot.getBox().getPos2()));
+        final List<Entity> list = world.getEntitiesOfClass(
+            Entity.class,
+            new AABB(
+                Vec3.atLowerCornerOf(slot.getBox().getPos1()),
+                Vec3.atLowerCornerOf(slot.getBox().getPos2())));
 
         for (final Entity entity : list)
         {
             // LEASH_KNOT, while not directly serializable, still serializes as part of the mob
             // and drops a lead, so we should alert builders that it exists in the scan
             if (!entities.containsKey(entity.getName().getString())
-                && (entity.getType().canSerialize() || entity.getType().equals(EntityType.LEASH_KNOT))
+                && (entity.getType().canSerialize() || entity.getType().equals(EntityTypes.LEASH_KNOT))
                 && (filter.isEmpty() || (entity.getName().getString().toLowerCase(Locale.US).contains(filter.toLowerCase(Locale.US))
                 || (entity.toString().toLowerCase(Locale.US).contains(filter.toLowerCase(Locale.US))))))
             {
@@ -508,7 +521,7 @@ public class WindowScan extends AbstractWindowSkeleton
                     else
                     {
                         final IPlacementHandler handler = PlacementHandlers.getHandler(world, BlockPos.ZERO, blockState);
-                        final List<ItemStack> itemList = handler.getRequiredItems(world, here, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(), new SimplePlacementContext(false, new PlacementSettings()));
+                        final List<ItemStack> itemList = handler.getRequiredItems(world, here, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), new SimplePlacementContext(false, new PlacementSettings()));
                         for (final ItemStack stack : itemList)
                         {
                             addNeededResource(stack, visible, here);
@@ -549,7 +562,7 @@ public class WindowScan extends AbstractWindowSkeleton
         }
 
         if (filter.isEmpty()
-            || res.getDescriptionId().toLowerCase(Locale.US).contains(filter.toLowerCase(Locale.US))
+                || res.getItem().getDescriptionId().toLowerCase(Locale.US).contains(filter.toLowerCase(Locale.US))
             || res.getHoverName().getString().toLowerCase(Locale.US).contains(filter.toLowerCase(Locale.US)))
         {
             final ItemStorage stackToStore = new ItemStorage(res, 1, true, false);
@@ -593,16 +606,16 @@ public class WindowScan extends AbstractWindowSkeleton
             public void updateElement(final int index, final Pane rowPane)
             {
                 final EntityType entity = tempEntities.get(index);
-                ItemStack entityIcon = entity.create(Minecraft.getInstance().level).getPickResult();
-                if (entity == EntityType.GLOW_ITEM_FRAME)
+                ItemStack entityIcon = entity.create(Minecraft.getInstance().level, EntitySpawnReason.LOAD).getPickResult();
+                if (entity == EntityTypes.GLOW_ITEM_FRAME)
                 {
                     entityIcon = new ItemStack(Items.GLOW_ITEM_FRAME);
                 }
-                else if (entity == EntityType.ITEM_FRAME)
+                else if (entity == EntityTypes.ITEM_FRAME)
                 {
                     entityIcon = new ItemStack(Items.ITEM_FRAME);
                 }
-                else if (entity == EntityType.MINECART)
+                else if (entity == EntityTypes.MINECART)
                 {
                     entityIcon = new ItemStack(Items.MINECART);
                 }

@@ -5,8 +5,8 @@ import com.ldtteam.structurize.blockentities.interfaces.IBlueprintDataProviderBE
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -70,7 +70,7 @@ public class AddRemoveTagMessage implements IMessage
     }
 
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         if (ctxIn.getSender() == null)
         {

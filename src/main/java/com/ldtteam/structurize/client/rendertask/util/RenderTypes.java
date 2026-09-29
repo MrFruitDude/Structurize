@@ -1,237 +1,139 @@
 package com.ldtteam.structurize.client.rendertask.util;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import net.minecraft.Util;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.resources.ResourceLocation;
-import org.lwjgl.opengl.GL11;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Util;
 
 import java.util.function.Function;
 
-public class RenderTypes extends RenderType
+/**
+ * Structurize's overlay render types, expressed with the current render pipeline API.
+ */
+public final class RenderTypes
 {
-    private RenderTypes(
-        final String nameIn,
-        final VertexFormat formatIn,
-        final VertexFormat.Mode drawModeIn,
-        final int bufferSizeIn,
-        final boolean useDelegateIn,
-        final boolean needsSortingIn,
-        final Runnable setupTaskIn,
-        final Runnable clearTaskIn)
+    private RenderTypes()
     {
-        super(nameIn, formatIn, drawModeIn, bufferSizeIn, useDelegateIn, needsSortingIn, setupTaskIn, clearTaskIn);
-        throw new IllegalStateException();
     }
 
-    /**
-     * Usable for rendering simple flat textures
-     *
-     * @param resLoc texture location
-     * @return render type
-     */
-    public static RenderType worldEntityIcon(final ResourceLocation resLoc)
+    public static RenderType worldEntityIcon(final Identifier texture)
     {
-        return RenderTypes.WORLD_ENTITY_ICON.apply(resLoc);
+        return WORLD_ENTITY_ICON.apply(texture);
     }
 
-    private static final DepthTestStateShard ALWAYS_DEPTH_TEST  = new AlwaysDepthTestStateShard();
-    private static final DepthTestStateShard GREATER_DEPTH_TEST = new DepthTestStateShard(">", GL11.GL_GREATER);
+    public static final RenderType LINES_OUTSIDE_BLOCKS = positionColor(
+        "structurize:lines_outside_blocks",
+        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        BlendFunction.TRANSLUCENT,
+        CompareOp.LESS_THAN_OR_EQUAL,
+        false,
+        true,
+        1024);
 
-    private static final Function<ResourceLocation, RenderType> WORLD_ENTITY_ICON = Util.memoize((p_173202_) -> {
-        return create("structurize:entity_icon",
-            DefaultVertexFormat.POSITION_TEX,
-            VertexFormat.Mode.QUADS,
-            1024,
-            false,
-            true,
-            CompositeState.builder()
-                .setShaderState(POSITION_TEX_SHADER)
-                .setTextureState(new TextureStateShard(p_173202_, false, false))
-                .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
-                .setDepthTestState(ALWAYS_DEPTH_TEST)
-                .createCompositeState(false));
+    public static final RenderType LINES_INSIDE_BLOCKS = positionColor(
+        "structurize:lines_inside_blocks",
+        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        BlendFunction.TRANSLUCENT,
+        CompareOp.GREATER_THAN,
+        false,
+        true,
+        1024);
+
+    public static final RenderType GLINT_LINES = positionColor(
+        "structurize_glint_lines",
+        com.mojang.blaze3d.PrimitiveTopology.DEBUG_LINES,
+        BlendFunction.ADDITIVE,
+        CompareOp.ALWAYS_PASS,
+        false,
+        false,
+        1 << 12);
+
+    public static final RenderType GLINT_LINES_WITH_WIDTH = positionColor(
+        "structurize_glint_lines_with_width",
+        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        BlendFunction.ADDITIVE,
+        CompareOp.ALWAYS_PASS,
+        true,
+        true,
+        1 << 13);
+
+    public static final RenderType LINES = positionColor(
+        "structurize_lines",
+        com.mojang.blaze3d.PrimitiveTopology.DEBUG_LINES,
+        BlendFunction.TRANSLUCENT,
+        CompareOp.LESS_THAN_OR_EQUAL,
+        false,
+        false,
+        1 << 14);
+
+    public static final RenderType LINES_WITH_WIDTH = positionColor(
+        "structurize_lines_with_width",
+        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        BlendFunction.TRANSLUCENT,
+        CompareOp.LESS_THAN_OR_EQUAL,
+        true,
+        true,
+        1 << 13);
+
+    public static final RenderType COLORED_TRIANGLES = positionColor(
+        "structurize_colored_triangles",
+        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        BlendFunction.TRANSLUCENT,
+        CompareOp.LESS_THAN_OR_EQUAL,
+        true,
+        true,
+        1 << 13);
+
+    public static final RenderType COLORED_TRIANGLES_NC_ND = positionColor(
+        "structurize_colored_triangles_nc_nd",
+        com.mojang.blaze3d.PrimitiveTopology.TRIANGLES,
+        BlendFunction.TRANSLUCENT,
+        CompareOp.ALWAYS_PASS,
+        false,
+        false,
+        1 << 12);
+
+    private static final Function<Identifier, RenderType> WORLD_ENTITY_ICON = Util.memoize(texture -> {
+        final RenderPipeline pipeline = RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+            .withLocation(Identifier.fromNamespaceAndPath("structurize", "pipeline/entity_icon"))
+            .withVertexShader("core/position_tex")
+            .withFragmentShader("core/position_tex")
+            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+            .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
+            .withPrimitiveTopology(com.mojang.blaze3d.PrimitiveTopology.QUADS)
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+            .build();
+        return RenderType.create(
+            "structurize:entity_icon",
+            RenderSetup.builder(pipeline).withTexture("Sampler0", texture).createRenderSetup());
     });
 
-    /**
-     * Used to draw overlay lines that only appear outside existing blocks.
-     */
-    public static final RenderType LINES_OUTSIDE_BLOCKS = create("structurize:lines_outside_blocks",
-        DefaultVertexFormat.POSITION_COLOR,
-        VertexFormat.Mode.TRIANGLES,
-        1024,
-        false,
-        false,
-        CompositeState.builder()
-            .setTextureState(NO_TEXTURE)
-            .setShaderState(POSITION_COLOR_SHADER)
-            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
-            .setDepthTestState(LEQUAL_DEPTH_TEST)
-            .setCullState(CULL)
-            .setLightmapState(NO_LIGHTMAP)
-            .setOverlayState(NO_OVERLAY)
-            .setLayeringState(NO_LAYERING)
-            .setOutputState(MAIN_TARGET)
-            .setTexturingState(DEFAULT_TEXTURING)
-            .setWriteMaskState(COLOR_WRITE)
-            .createCompositeState(false));
-
-    /**
-     * Used to draw overlay lines that only appear inside existing blocks.
-     */
-    public static final RenderType LINES_INSIDE_BLOCKS = create("structurize:lines_inside_blocks",
-        DefaultVertexFormat.POSITION_COLOR,
-        VertexFormat.Mode.TRIANGLES,
-        1024,
-        false,
-        false,
-        CompositeState.builder()
-            .setTextureState(NO_TEXTURE)
-            .setShaderState(POSITION_COLOR_SHADER)
-            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
-            .setDepthTestState(GREATER_DEPTH_TEST)
-            .setCullState(CULL)
-            .setLightmapState(NO_LIGHTMAP)
-            .setOverlayState(NO_OVERLAY)
-            .setLayeringState(NO_LAYERING)
-            .setOutputState(MAIN_TARGET)
-            .setTexturingState(DEFAULT_TEXTURING)
-            .setWriteMaskState(COLOR_WRITE)
-            .createCompositeState(false));
-
-    public static final RenderType GLINT_LINES = create("structurize_glint_lines",
-        DefaultVertexFormat.POSITION_COLOR,
-        VertexFormat.Mode.DEBUG_LINES,
-        1 << 12,
-        false,
-        false,
-        RenderType.CompositeState.builder()
-            .setTextureState(NO_TEXTURE)
-            .setShaderState(POSITION_COLOR_SHADER)
-            .setTransparencyState(GLINT_TRANSPARENCY)
-            .setDepthTestState(NO_DEPTH_TEST)
-            .setCullState(NO_CULL)
-            .setLightmapState(NO_LIGHTMAP)
-            .setOverlayState(NO_OVERLAY)
-            .setLayeringState(NO_LAYERING)
-            .setOutputState(MAIN_TARGET)
-            .setTexturingState(DEFAULT_TEXTURING)
-            .setWriteMaskState(COLOR_WRITE)
-            .createCompositeState(false));
-
-    public static final RenderType GLINT_LINES_WITH_WIDTH = create("structurize_glint_lines_with_width",
-        DefaultVertexFormat.POSITION_COLOR,
-        VertexFormat.Mode.TRIANGLES,
-        1 << 13,
-        false,
-        false,
-        RenderType.CompositeState.builder()
-            .setTextureState(NO_TEXTURE)
-            .setShaderState(POSITION_COLOR_SHADER)
-            .setTransparencyState(GLINT_TRANSPARENCY)
-            .setDepthTestState(AlwaysDepthTestStateShard.ALWAYS_DEPTH_TEST)
-            .setCullState(CULL)
-            .setLightmapState(NO_LIGHTMAP)
-            .setOverlayState(NO_OVERLAY)
-            .setLayeringState(NO_LAYERING)
-            .setOutputState(MAIN_TARGET)
-            .setTexturingState(DEFAULT_TEXTURING)
-            .setWriteMaskState(COLOR_DEPTH_WRITE)
-            .createCompositeState(false));
-
-    public static final RenderType LINES = create("structurize_lines",
-        DefaultVertexFormat.POSITION_COLOR,
-        VertexFormat.Mode.DEBUG_LINES,
-        1 << 14,
-        false,
-        false,
-        RenderType.CompositeState.builder()
-            .setTextureState(NO_TEXTURE)
-            .setShaderState(POSITION_COLOR_SHADER)
-            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
-            .setDepthTestState(LEQUAL_DEPTH_TEST)
-            .setCullState(NO_CULL)
-            .setLightmapState(NO_LIGHTMAP)
-            .setOverlayState(NO_OVERLAY)
-            .setLayeringState(NO_LAYERING)
-            .setOutputState(MAIN_TARGET)
-            .setTexturingState(DEFAULT_TEXTURING)
-            .setWriteMaskState(COLOR_WRITE)
-            .createCompositeState(false));
-
-    public static final RenderType LINES_WITH_WIDTH = create("structurize_lines_with_width",
-        DefaultVertexFormat.POSITION_COLOR,
-        VertexFormat.Mode.TRIANGLES,
-        1 << 13,
-        false,
-        false,
-        RenderType.CompositeState.builder()
-            .setTextureState(NO_TEXTURE)
-            .setShaderState(POSITION_COLOR_SHADER)
-            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
-            .setDepthTestState(LEQUAL_DEPTH_TEST)
-            .setCullState(CULL)
-            .setLightmapState(NO_LIGHTMAP)
-            .setOverlayState(NO_OVERLAY)
-            .setLayeringState(NO_LAYERING)
-            .setOutputState(MAIN_TARGET)
-            .setTexturingState(DEFAULT_TEXTURING)
-            .setWriteMaskState(COLOR_DEPTH_WRITE)
-            .createCompositeState(false));
-
-    public static final RenderType COLORED_TRIANGLES = create("structurize_colored_triangles",
-        DefaultVertexFormat.POSITION_COLOR,
-        VertexFormat.Mode.TRIANGLES,
-        1 << 13,
-        false,
-        false,
-        RenderType.CompositeState.builder()
-            .setTextureState(NO_TEXTURE)
-            .setShaderState(POSITION_COLOR_SHADER)
-            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
-            .setDepthTestState(LEQUAL_DEPTH_TEST)
-            .setCullState(CULL)
-            .setLightmapState(NO_LIGHTMAP)
-            .setOverlayState(NO_OVERLAY)
-            .setLayeringState(NO_LAYERING)
-            .setOutputState(MAIN_TARGET)
-            .setTexturingState(DEFAULT_TEXTURING)
-            .setWriteMaskState(COLOR_DEPTH_WRITE)
-            .createCompositeState(false));
-
-    public static final RenderType COLORED_TRIANGLES_NC_ND = create("structurize_colored_triangles_nc_nd",
-        DefaultVertexFormat.POSITION_COLOR,
-        VertexFormat.Mode.TRIANGLES,
-        1 << 12,
-        false,
-        false,
-        RenderType.CompositeState.builder()
-            .setTextureState(NO_TEXTURE)
-            .setShaderState(POSITION_COLOR_SHADER)
-            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
-            .setDepthTestState(NO_DEPTH_TEST)
-            .setCullState(NO_CULL)
-            .setLightmapState(NO_LIGHTMAP)
-            .setOverlayState(NO_OVERLAY)
-            .setLayeringState(NO_LAYERING)
-            .setOutputState(MAIN_TARGET)
-            .setTexturingState(DEFAULT_TEXTURING)
-            .setWriteMaskState(COLOR_WRITE)
-            .createCompositeState(false));
-
-    private static class AlwaysDepthTestStateShard extends DepthTestStateShard
+    private static RenderType positionColor(final String name,
+        final com.mojang.blaze3d.PrimitiveTopology mode,
+        final BlendFunction blendFunction,
+        final CompareOp depthTest,
+        final boolean writeDepth,
+        final boolean cull,
+        final int bufferSize)
     {
-        public static final DepthTestStateShard ALWAYS_DEPTH_TEST = new AlwaysDepthTestStateShard();
-
-        private AlwaysDepthTestStateShard()
-        {
-            super("true_always", -1);
-            setupState = () -> {
-                RenderSystem.enableDepthTest();
-                RenderSystem.depthFunc(GL11.GL_ALWAYS);
-            };
-        }
+        final RenderPipeline pipeline = RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+            .withLocation(Identifier.fromNamespaceAndPath("structurize", "pipeline/" + name.substring(name.indexOf(':') + 1)))
+            .withVertexShader("core/position_color")
+            .withFragmentShader("core/position_color")
+            .withColorTargetState(new ColorTargetState(blendFunction))
+            .withCull(cull)
+            .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
+            .withPrimitiveTopology(mode)
+            .withDepthStencilState(new DepthStencilState(depthTest, writeDepth))
+            .build();
+        return RenderType.create(name, RenderSetup.builder(pipeline).createRenderSetup());
     }
 }

@@ -4,8 +4,8 @@ import com.ldtteam.structurize.management.Manager;
 import com.ldtteam.structurize.util.PlacerholderFillOperation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -49,8 +49,10 @@ public class FillTopPlaceholderMessage implements IMessage
      *
      * @param pos1      start coordinate.
      * @param pos2      end coordinate.
-     * @param blockFrom the block to replace.
-     * @param blockTo   the block to replace it with.
+     * @param yStretch         vertical stretch factor.
+     * @param circleRadiusMult circle radius multiplier.
+     * @param heightOffset     height offset.
+     * @param minDistToBlocks  minimum distance from blocks.
      */
     public FillTopPlaceholderMessage(
       final BlockPos pos1,
@@ -87,7 +89,7 @@ public class FillTopPlaceholderMessage implements IMessage
     }
 
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         if (!ctxIn.getSender().isCreative())
         {

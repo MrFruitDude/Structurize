@@ -5,24 +5,26 @@ import com.ldtteam.structurize.client.gui.AbstractBlueprintManipulationWindow;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
-import net.minecraftforge.client.settings.IKeyConflictContext;
-import net.minecraftforge.client.settings.KeyConflictContext;
-import net.minecraftforge.client.settings.KeyModifier;
-import net.minecraftforge.common.util.Lazy;
+import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.settings.IKeyConflictContext;
+import net.neoforged.neoforge.client.settings.KeyConflictContext;
+import net.neoforged.neoforge.client.settings.KeyModifier;
+import net.neoforged.neoforge.common.util.Lazy;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
 public class ModKeyMappings
 {
-    private static final String CATEGORY = "key.structurize.categories.general";
+    private static final KeyMapping.Category CATEGORY = new KeyMapping.Category(
+        Identifier.fromNamespaceAndPath("structurize", "general"));
 
     public static final IKeyConflictContext BLUEPRINT_WINDOW = new IKeyConflictContext()
     {
         @Override
         public boolean isActive()
         {
-            if (Minecraft.getInstance().screen instanceof BOScreen screen)
+            if (Minecraft.getInstance().gui.screen() instanceof BOScreen screen)
             {
                 return screen.getWindow() instanceof AbstractBlueprintManipulationWindow;
             }
@@ -71,6 +73,7 @@ public class ModKeyMappings
      */
     public static void register(@NotNull final RegisterKeyMappingsEvent event)
     {
+        event.registerCategory(CATEGORY);
         event.register(TELEPORT.get());
         event.register(MOVE_FORWARD.get());
         event.register(MOVE_BACK.get());

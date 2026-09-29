@@ -16,7 +16,7 @@ public class ClientProxy implements IProxy
     @SuppressWarnings("resource")
     public void openBuildToolWindow(@Nullable final BlockPos pos, final int groundstyle)
     {
-        if (Minecraft.getInstance().screen != null)
+        if (Minecraft.getInstance().gui.screen() != null)
         {
             return;
         }

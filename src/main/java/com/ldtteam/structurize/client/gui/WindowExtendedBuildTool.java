@@ -27,7 +27,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -329,10 +329,11 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
                             previewData.getPos(),
                             previewData.getRotationMirror().rotation(),
                             previewData.getRotationMirror().mirror()));
-            if (type == BuildToolPlacementMessage.HandlerType.Survival)
-            {
-                cancelClicked();
-            }
+            // A placement request consumes the current preview regardless of
+            // whether it is a survival handler or an instant creative
+            // placement. Keeping the cache for Complete/Pretty leaves the
+            // just-constructed building covered by a stale ghost blueprint.
+            cancelClicked();
         }
     }
 
@@ -357,17 +358,17 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
                     {
                         try
                         {
-                            img.setImage(OutOfJarResourceLocation.of(MOD_ID, category.packMeta.getPath().resolve(category.subPath).resolve("icon.png")), false);
-                            img.setImageDisabled(OutOfJarResourceLocation.of(MOD_ID, category.packMeta.getPath().resolve(category.subPath).resolve("icon_disabled.png")), false);
+                            img.setImage(OutOfJarResourceLocation.of(MOD_ID, category.packMeta.getPath().resolve(category.subPath).resolve("icon.png")));
+                            img.setImageDisabled(OutOfJarResourceLocation.of(MOD_ID, category.packMeta.getPath().resolve(category.subPath).resolve("icon_disabled.png")));
                         }
                         catch (final Exception ex)
                         {
-                            img.setImage(new ResourceLocation(DEFAULT_ICON), false);
+                            img.setImage(Identifier.parse(DEFAULT_ICON));
                         }
                     }
                     else
                     {
-                        img.setImage(new ResourceLocation(DEFAULT_ICON), false);
+                        img.setImage(Identifier.parse(DEFAULT_ICON));
                     }
 
                     final String id = category.subPath;
@@ -733,7 +734,7 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
                 final ButtonImage button = rowPane.findPaneOfTypeByID("alternative", ButtonImage.class);
                 rowPane.findPaneOfTypeByID("id", Text.class).setText(Component.literal(depth + ":" + list.get(index).getKey()));
                 button.setText(Component.literal(list.get(index).getKey()));
-                button.setTextColor(ChatFormatting.BLACK.getColor());
+                button.setTextColor(0xFF000000);
             }
         });
     }
@@ -784,16 +785,16 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
                     final ButtonImage button = rowPane.findPaneOfTypeByID("level", ButtonImage.class);
                     rowPane.findPaneOfTypeByID("id", Text.class).setText(Component.literal(buttonId));
                     button.setText(Component.literal(""));
-                    button.setImage(new ResourceLocation(MOD_ID, "textures/gui/buildtool/back_medium.png"), false);
+                    button.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/buildtool/back_medium.png"));
                 }
                 else
                 {
                     final String buttonId = depth + ":" + (hasAlternatives ? index - 1 : index);
                     final ButtonImage button = rowPane.findPaneOfTypeByID("level", ButtonImage.class);
                     rowPane.findPaneOfTypeByID("id", Text.class).setText(Component.literal(buttonId));
-                    button.setImage(new ResourceLocation(MOD_ID, "textures/gui/buildtool/button_medium.png"), false);
+                    button.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/buildtool/button_medium.png"));
                     button.setText(Component.literal("Level: " + (index + (hasAlternatives ? 0 : 1))));
-                    button.setTextColor(ChatFormatting.BLACK.getColor());
+                    button.setTextColor(0xFF000000);
                 }
             }
         });
@@ -810,7 +811,7 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
             }
             img.setID("back:" + buttonData.data);
             img.setVisible(true);
-            img.setImage(new ResourceLocation(MOD_ID, "textures/gui/buildtool/back_medium.png"), false);
+            img.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/buildtool/back_medium.png"));
             PaneBuilders.tooltipBuilder().hoverPane(img).build().setText(Component.literal("back"));
         }
         else if (buttonData.type == ButtonType.Blueprint)
@@ -872,7 +873,7 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
                 }
 
                 PaneBuilders.tooltipBuilder().hoverPane(img).build().setText(toolTip);
-                img.setImage(new ResourceLocation(MOD_ID, "textures/gui/buildtool/button_blueprint_disabled" + (hasAlts ? "_variant" : "") + ".png"), false);
+                img.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/buildtool/button_blueprint_disabled" + (hasAlts ? "_variant" : "") + ".png"));
                 isLocked = true;
             }
 
@@ -880,12 +881,11 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
 
             if (isCurrentlySelected)
             {
-                img.setImage(new ResourceLocation(MOD_ID, "textures/gui/buildtool/button_blueprint_selected" + (allInvis ? "_creative" : "") + (hasAlts ? "_variant" : "") + ".png"),
-                  false);
+                img.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/buildtool/button_blueprint_selected" + (allInvis ? "_creative" : "") + (hasAlts ? "_variant" : "") + ".png"));
             }
             else if (!isLocked)
             {
-                img.setImage(new ResourceLocation(MOD_ID, "textures/gui/buildtool/button_blueprint" + (allInvis ? "_creative" : "") + (hasAlts ? "_variant" : "") + ".png"), false);
+                img.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/buildtool/button_blueprint" + (allInvis ? "_creative" : "") + (hasAlts ? "_variant" : "") + ".png"));
             }
         }
     }
@@ -917,7 +917,7 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
             }
             img.setID("back:" + buttonData.data);
             img.setVisible(true);
-            img.setImage(new ResourceLocation(MOD_ID, "textures/gui/buildtool/back_medium.png"), false);
+            img.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/buildtool/back_medium.png"));
             PaneBuilders.tooltipBuilder().hoverPane(img).build().setText(Component.literal("back"));
             return;
         }
@@ -936,7 +936,7 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
         final Component desc = Component.literal(descString);
         img.setText(desc);
         img.setVisible(true);
-        img.setTextColor(ChatFormatting.BLACK.getColor());
+        img.setTextColor(0xFF000000);
     }
 
     @Override
@@ -1145,6 +1145,11 @@ public final class WindowExtendedBuildTool extends AbstractBlueprintManipulation
         data.setBlueprint(blueprint);
         adjustToGroundOffset();
         selectedBlueprint = blueprint;
+
+        // Blueprint selection can happen from the async category/level lists,
+        // before the generic button-dispatch path runs. Keep the movement and
+        // rotation controls visible as soon as a preview is actually ready.
+        findPaneOfTypeByID("manipulator", View.class).setVisible(true);
 
         final boolean canBuild = availableBlueprintPredicate == null || availableBlueprintPredicate.test(blueprint);
 

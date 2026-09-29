@@ -6,11 +6,11 @@ import com.ldtteam.structurize.network.messages.SyncSettingsToServer;
 import com.ldtteam.structurize.storage.rendering.RenderingCache;
 import com.ldtteam.structurize.storage.rendering.types.BlueprintPreviewData;
 import io.netty.util.internal.shaded.org.jctools.queues.MessagePassingQueue.Consumer;
-import net.minecraftforge.common.ForgeConfigSpec;
-import net.minecraftforge.common.ForgeConfigSpec.BooleanValue;
-import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
-import net.minecraftforge.common.ForgeConfigSpec.DoubleValue;
-import net.minecraftforge.common.ForgeConfigSpec.IntValue;
+import net.neoforged.neoforge.common.ModConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec.BooleanValue;
+import net.neoforged.neoforge.common.ModConfigSpec.ConfigValue;
+import net.neoforged.neoforge.common.ModConfigSpec.DoubleValue;
+import net.neoforged.neoforge.common.ModConfigSpec.IntValue;
 
 /**
  * Mod client configuration.
@@ -32,7 +32,7 @@ public class ClientConfiguration extends AbstractConfiguration
      *
      * @param builder config builder
      */
-    protected ClientConfiguration(final ForgeConfigSpec.Builder builder)
+    protected ClientConfiguration(final ModConfigSpec.Builder builder)
     {
         createCategory(builder, "blueprint.renderer");
         // if you add anything to this category, also add it #collectPreviewRendererSettings()
@@ -41,7 +41,9 @@ public class ClientConfiguration extends AbstractConfiguration
         sharePreviews = defineBoolean(builder, "share_previews", false);
         displayShared = defineBoolean(builder, "see_shared_previews", false);
         rendererLightLevel = defineInteger(builder, "light_level", 15, -1, 15);
-        rendererTransparency = defineDouble(builder, "transparency", -1, -1, 1);
+        // Keep blueprint presets readable against the world by default.  A negative value
+        // remains available for the legacy solid-preview behavior through the config UI.
+        rendererTransparency = defineDouble(builder, "transparency", 0.4, -1, 1);
 
         addWatcher(BlueprintHandler.getInstance()::clearCache, renderPlaceholdersNice, rendererLightLevel);
         addWatcher(displayShared, (oldValue, isSharingEnabled) -> {

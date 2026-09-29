@@ -8,7 +8,7 @@ import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.placement.IPlacementContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.util.Tuple;
+import com.ldtteam.structurize.api.util.Tuple;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -80,14 +80,14 @@ public class DoDoorBlockPlacementHandler implements IPlacementHandler
         final List<ItemStack> itemList = new ArrayList<>();
         if (tileEntityData != null && blockState.getValue(net.minecraft.world.level.block.DoorBlock.HALF).equals(DoubleBlockHalf.LOWER))
         {
-            BlockPos blockpos = new BlockPos(tileEntityData.getInt("x"), tileEntityData.getInt("y"), tileEntityData.getInt("z"));
-            final BlockEntity tileEntity = BlockEntity.loadStatic(blockpos, blockState, tileEntityData);
+            BlockPos blockpos = new BlockPos(tileEntityData.getIntOr("x", 0), tileEntityData.getIntOr("y", 0), tileEntityData.getIntOr("z", 0));
+            final BlockEntity tileEntity = BlockEntity.loadStatic(blockpos, blockState, tileEntityData, world.registryAccess());
             if (tileEntity == null)
             {
                 return Collections.emptyList();
             }
 
-            itemList.add(BlockUtils.getMaterializedItemStack(null, tileEntity));
+            itemList.add(BlockUtils.getMaterializedItemStack(tileEntity, world.registryAccess()));
         }
         itemList.removeIf(ItemStackUtils::isEmpty);
         return itemList;
@@ -127,4 +127,3 @@ public class DoDoorBlockPlacementHandler implements IPlacementHandler
         return compareBEData(blockEntityData);
     }
 }
-

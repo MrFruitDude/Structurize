@@ -5,7 +5,6 @@ import com.ldtteam.structurize.api.util.ItemStackUtils;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.Level;
@@ -25,7 +24,7 @@ public class ItemShapeTool extends AbstractItemStructurize
     @SuppressWarnings("resource")
     public InteractionResult useOn(final UseOnContext context)
     {
-        if (context.getLevel().isClientSide)
+        if (context.getLevel().isClientSide())
         {
             Structurize.proxy.openShapeToolWindow(context.getClickedPos().relative(context.getClickedFace()));
         }
@@ -34,34 +33,17 @@ public class ItemShapeTool extends AbstractItemStructurize
     }
 
         @Override
-    public InteractionResultHolder<ItemStack> use(final Level worldIn, final Player playerIn, final InteractionHand hand)
+    public InteractionResult use(final Level worldIn, final Player playerIn, final InteractionHand hand)
     {
         final ItemStack stack = playerIn.getItemInHand(hand);
 
-        if (worldIn.isClientSide)
+        if (worldIn.isClientSide())
         {
             Structurize.proxy.openShapeToolWindow(null);
         }
 
-        return new InteractionResultHolder<>(InteractionResult.SUCCESS, stack);
+        return InteractionResult.SUCCESS.heldItemTransformedTo(stack);
     }
 
 
-    @Override
-    public ItemStack getCraftingRemainingItem(final ItemStack itemStack)
-    {
-        //we want to return the shape tool when use for crafting
-        if (ItemStackUtils.isEmpty(itemStack))
-        {
-            return ItemStack.EMPTY;
-        }
-        return itemStack.copy();
-    }
-
-    @Override
-    public boolean hasCraftingRemainingItem(final ItemStack itemStack)
-    {
-        //we want to return the shape tool when use for crafting
-        return !ItemStackUtils.isEmpty(itemStack);
-    }
 }

@@ -36,7 +36,7 @@ public class BlueprintTagUtils
 
         if (nbt != null)
         {
-            return IBlueprintDataProviderBE.readTagPosMapFrom(nbt.getCompound(TAG_BLUEPRINTDATA));
+            return IBlueprintDataProviderBE.readTagPosMapFrom(nbt.getCompoundOrEmpty(TAG_BLUEPRINTDATA));
         }
 
         return new HashMap<>();

@@ -2,8 +2,8 @@ package com.ldtteam.structurize.network.messages;
 
 import com.ldtteam.structurize.management.Manager;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -42,7 +42,7 @@ public class ServerUUIDMessage implements IMessage
     }
 
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         Manager.setServerUUID(serverUUID);
     }

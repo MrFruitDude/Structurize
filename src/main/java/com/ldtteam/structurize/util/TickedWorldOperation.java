@@ -12,6 +12,8 @@ import com.ldtteam.structurize.placement.StructurePlacer;
 import com.ldtteam.structurize.placement.handlers.placement.IPlacementHandler;
 import com.ldtteam.structurize.placement.handlers.placement.PlacementHandlers;
 import com.mojang.authlib.GameProfile;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -24,7 +26,7 @@ import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
-import net.minecraftforge.common.util.FakePlayer;
+import net.neoforged.neoforge.common.util.FakePlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -223,7 +225,7 @@ public class TickedWorldOperation implements ITickedWorldOperation
 
         if (operation == OperationType.PLACE_STRUCTURE)
         {
-            if (placer.getHandler().getWorld().dimension().location().equals(world.dimension().location()))
+            if (placer.getHandler().getWorld().dimension().identifier().equals(world.dimension().identifier()))
             {
                 StructurePhasePlacementResult result;
                 switch (structurePhase)
@@ -313,7 +315,7 @@ public class TickedWorldOperation implements ITickedWorldOperation
                     {
                         final IPlacementHandler handler = PlacementHandlers.getHandler(world, BlockPos.ZERO, blockState);
                         final List<ItemStack> itemList =
-                          handler.getRequiredItems(world, here, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(), new SimplePlacementContext(this.placer.getHandler().fancyPlacement(), this.placer.getHandler().getRotationMirror()));
+                          handler.getRequiredItems(world, here, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), new SimplePlacementContext(this.placer.getHandler().fancyPlacement(), this.placer.getHandler().getRotationMirror()));
                         if (!itemList.isEmpty() && ItemStackUtils.compareItemStacksIgnoreStackSize(itemList.get(0), firstBlock))
                         {
                             isMatch = true;

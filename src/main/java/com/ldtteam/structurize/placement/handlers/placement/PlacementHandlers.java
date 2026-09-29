@@ -10,11 +10,13 @@ import com.ldtteam.structurize.placement.structure.IStructureHandler;
 import com.ldtteam.structurize.tag.ModTags;
 import com.ldtteam.structurize.util.BlockUtils;
 import com.ldtteam.structurize.util.RotationMirror;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.tags.BlockTags;
-import net.minecraft.util.Tuple;
+import com.ldtteam.structurize.api.util.Tuple;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -729,7 +731,7 @@ public final class PlacementHandlers
             {
                 itemList.add(BlockUtils.getItemStackFromBlockState(blockState));
             }
-            itemList.add(new ItemStack(((FlowerPotBlock) blockState.getBlock()).getContent()));
+            itemList.add(new ItemStack(((FlowerPotBlock) blockState.getBlock()).getPotted()));
             itemList.removeIf(ItemStackUtils::isEmpty);
             return itemList;
         }
@@ -744,7 +746,7 @@ public final class PlacementHandlers
             return worldState.equals(blueprintState)
                 && blueprintState.getBlock() instanceof FlowerPotBlock blueprintPot
                 && worldState.getBlock() instanceof FlowerPotBlock worldPot
-                && blueprintPot.getContent() == worldPot.getContent();
+                && blueprintPot.getPotted() == worldPot.getPotted();
         }
     }
 
@@ -1093,13 +1095,13 @@ public final class PlacementHandlers
                 return ActionProcessingResult.SUCCESS;
             }
 
-            if (blockState.getValue(PointedDripstoneBlock.THICKNESS) != DripstoneThickness.TIP && blockState.getValue(PointedDripstoneBlock.THICKNESS) != DripstoneThickness.TIP_MERGE)
+            if (blockState.getValue(PointedDripstoneBlock.THICKNESS) != SpeleothemThickness.TIP && blockState.getValue(PointedDripstoneBlock.THICKNESS) != SpeleothemThickness.TIP_MERGE)
             {
                 return ActionProcessingResult.PASS;
             }
 
             final Direction dir = blockState.getValue(PointedDripstoneBlock.TIP_DIRECTION).getOpposite();
-            if (blockState.getValue(PointedDripstoneBlock.THICKNESS) == DripstoneThickness.TIP_MERGE)
+            if (blockState.getValue(PointedDripstoneBlock.THICKNESS) == SpeleothemThickness.TIP_MERGE)
             {
                 placeDripStoneInDir(dir.getOpposite(), blueprint, pos.subtract(centerPos).offset(blueprint.getPrimaryBlockOffset()), pos, blockState, world);
                 placeDripStoneInDir(dir, blueprint, pos.subtract(centerPos).offset(blueprint.getPrimaryBlockOffset()), pos, blockState, world);
@@ -1397,7 +1399,7 @@ public final class PlacementHandlers
     {
         if (tileEntityData != null)
         {
-            final BlockEntity newTile = BlockEntity.loadStatic(pos, world.getBlockState(pos), tileEntityData);
+            final BlockEntity newTile = BlockEntity.loadStatic(pos, world.getBlockState(pos), tileEntityData, world.registryAccess());
             if (newTile != null)
             {
                 if (newTile instanceof final IRotatableBlockEntity rotatable)
@@ -1409,7 +1411,10 @@ public final class PlacementHandlers
                 final BlockEntity worldBlockEntity = world.getBlockEntity(pos);
                 if (worldBlockEntity != null)
                 {
-                    worldBlockEntity.load(newTile.saveWithFullMetadata());
+                    worldBlockEntity.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(
+                        net.minecraft.util.ProblemReporter.DISCARDING,
+                        world.registryAccess(),
+                        newTile.saveWithFullMetadata(world.registryAccess())));
                     worldBlockEntity.setChanged();
                 }
                 else

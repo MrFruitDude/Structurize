@@ -1,18 +1,22 @@
 pluginManagement {
     repositories {
+        maven { url = uri('/tmp/maven-local') }
         gradlePluginPortal()
         maven {
-            name = 'MinecraftForge'
-            url = 'https://maven.minecraftforge.net/'
+            url = uri('https://ldtteam.jfrog.io/artifactory/tableau/')
+            name = 'Tableau'
         }
     }
 }
 
 plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.5.0'
+    id 'com.ldtteam.tableau' version '0.0.96-j21.0'
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
-gradle.startParameter.setProjectProperties(new HashMap<>(gradle.startParameter.getProjectProperties()))
-gradle.startParameter.getProjectProperties().put("build.start", Long.toString(System.currentTimeMillis()))
+rootProject.name = 'structurize'
 
-rootProject.name = "structurize"
+features {
+    usesGit = true
+    usesCurse = true
+}

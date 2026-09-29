@@ -1,13 +1,13 @@
 modLoader="javafml"
-loaderVersion="${fmlRange}"
+loaderVersion="${fml_range}"
 license="GPL 3.0"
 issueTrackerURL="https://github.com/ldtteam/structurize/issues/new/choose"
 [[mods]]
 modId="structurize"
-version="${version}"
+version="${file.jarVersion}"
 displayName="Structurize"
 displayURL="https://minecolonies.com/"
-logoFile="structurize.png"
+iconFile="structurize.png"
 credits="Every coffee anyone ever drank!"
 authors="LDT Team"
 description='''
@@ -20,26 +20,26 @@ Allows you to:
  - and many other nice things a great builder would love to have!
 '''
 [[dependencies.structurize]]
-    modId="forge"
-    mandatory=true
-    versionRange="${forgeRange}"
+    modId="neoforge"
+    type="required"
+    versionRange="${neoforge_range}"
     ordering="NONE"
     side="BOTH"
 [[dependencies.structurize]]
     modId="minecraft"
-    mandatory=true
+    type="required"
     versionRange="${minecraftRange}"
     ordering="NONE"
     side="BOTH"
 [[dependencies.structurize]]
     modId="blockui"
-    mandatory=true
+    type="required"
     versionRange="${blockUiRange}"
     ordering="NONE"
     side="CLIENT"
 [[dependencies.structurize]]
     modId="domum_ornamentum"
-    mandatory=true
+    type="required"
     versionRange="${domumOrnamentumRange}"
     ordering="AFTER"
     side="BOTH"

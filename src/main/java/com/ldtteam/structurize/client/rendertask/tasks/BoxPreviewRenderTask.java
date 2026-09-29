@@ -4,7 +4,7 @@ import com.ldtteam.structurize.client.rendercontext.WorldEventRenderContext;
 import com.ldtteam.structurize.client.rendertask.task.IRenderTask;
 import com.ldtteam.structurize.client.rendertask.task.TimedTask;
 import com.ldtteam.structurize.client.rendertask.util.WorldRenderMacros;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
  * Preview data for box contexts.
@@ -31,8 +31,8 @@ public class BoxPreviewRenderTask extends TimedTask implements IRenderTask
     }
 
     @Override
-    public boolean shouldRenderIn(final RenderLevelStageEvent.Stage renderStage)
+    public boolean shouldRenderIn(final Class<? extends RenderLevelStageEvent> renderStage)
     {
-        return renderStage == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES;
+        return renderStage == RenderLevelStageEvent.AfterOpaqueFeatures.class;
     }
 }

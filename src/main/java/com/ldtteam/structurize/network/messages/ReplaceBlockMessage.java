@@ -3,10 +3,11 @@ package com.ldtteam.structurize.network.messages;
 import com.ldtteam.structurize.client.gui.util.ItemPositionsStorage;
 import com.ldtteam.structurize.management.Manager;
 import com.ldtteam.structurize.operations.ReplaceBlockOperation;
+import com.ldtteam.structurize.util.ItemStackNbtHelper;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -34,7 +35,7 @@ public class ReplaceBlockMessage implements IMessage
      */
     public ReplaceBlockMessage(final FriendlyByteBuf buf)
     {
-        this.blockTo = buf.readItem();
+        this.blockTo = ItemStackNbtHelper.readNetworkStack(buf);
         this.pct = buf.readInt();
         toReplace = new ItemPositionsStorage(buf);
     }
@@ -54,7 +55,7 @@ public class ReplaceBlockMessage implements IMessage
     @Override
     public void toBytes(final FriendlyByteBuf buf)
     {
-        buf.writeItem(blockTo);
+        ItemStackNbtHelper.writeNetworkStack(buf, blockTo);
         buf.writeInt(pct);
         toReplace.serialize(buf);
     }
@@ -67,7 +68,7 @@ public class ReplaceBlockMessage implements IMessage
     }
 
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         if (!ctxIn.getSender().isCreative())
         {

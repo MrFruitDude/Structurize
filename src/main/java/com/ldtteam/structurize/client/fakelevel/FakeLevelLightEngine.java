@@ -84,13 +84,6 @@ public class FakeLevelLightEngine extends LevelLightEngine
     }
 
     @Override
-    public boolean lightOnInSection(final SectionPos p_285319_)
-    {
-        // Noop, used only in chunk compiling?
-        return false;
-    }
-
-    @Override
     public void checkBlock(final BlockPos p_75823_)
     {
         // Noop

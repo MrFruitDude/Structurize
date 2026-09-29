@@ -1,12 +1,13 @@
 package com.ldtteam.structurize.network.messages;
 
 import com.ldtteam.structurize.items.ItemScanTool;
+import com.ldtteam.structurize.util.ItemStackNbtHelper;
 import com.ldtteam.structurize.util.ScanToolData;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,13 +52,13 @@ public class UpdateScanToolMessage implements IMessage
     }
 
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         final ItemStack stack = ctxIn.getSender().getMainHandItem();
         if (stack.getItem() instanceof ItemScanTool tool)
         {
-            stack.setTag(this.tag);
-            tool.loadSlot(new ScanToolData(stack.getOrCreateTag()), stack);
+            ItemStackNbtHelper.setCustomTag(stack, this.tag);
+            tool.loadSlot(new ScanToolData(ItemStackNbtHelper.getOrCreateCustomTag(stack)), stack);
         }
     }
 }

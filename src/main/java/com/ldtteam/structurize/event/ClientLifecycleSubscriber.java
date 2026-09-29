@@ -1,25 +1,26 @@
 package com.ldtteam.structurize.event;
 
 import com.ldtteam.structurize.blockentities.ModBlockEntities;
-import com.ldtteam.structurize.blocks.ModBlocks;
 import com.ldtteam.structurize.client.*;
 import com.ldtteam.structurize.Structurize;
 import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.client.model.OverlaidModelLoader;
 import com.ldtteam.structurize.items.ItemStackTooltip;
+import com.ldtteam.structurize.storage.ClientStructurePackLoader;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ItemBlockRenderTypes;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.client.event.*;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.event.config.ModConfigEvent;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 
 public class ClientLifecycleSubscriber
 {
@@ -31,6 +32,11 @@ public class ClientLifecycleSubscriber
     @SubscribeEvent
     public static void onClientInit(final FMLClientSetupEvent event)
     {
+        // Minecraft is initialized by FMLClientSetupEvent; starting discovery from
+        // the mod constructor can observe a null client and permanently skip all
+        // local structure packs.
+        ClientStructurePackLoader.onClientLoading();
+
         final ResourceManager rm = Minecraft.getInstance().getResourceManager();
         if (rm instanceof final ReloadableResourceManager resourceManager)
         {
@@ -53,17 +59,10 @@ public class ClientLifecycleSubscriber
         }
     }
 
-    @OnlyIn(Dist.CLIENT)
     @SubscribeEvent
-    public static void doClientStuff(final EntityRenderersEvent.RegisterRenderers event)
+    public static void registerModelLoaders(final ModelEvent.RegisterLoaders event)
     {
-        ItemBlockRenderTypes.setRenderLayer(ModBlocks.blockSubstitution.get(), RenderType.translucent());
-    }
-
-    @SubscribeEvent
-    public static void registerGeometry(final ModelEvent.RegisterGeometryLoaders event)
-    {
-        event.register("overlaid", new OverlaidModelLoader());
+        event.register(Identifier.fromNamespaceAndPath("structurize", "overlaid"), new OverlaidModelLoader());
     }
 
     @SubscribeEvent
@@ -84,15 +83,4 @@ public class ClientLifecycleSubscriber
         ModKeyMappings.register(event);
     }
 
-    @SubscribeEvent
-    public static void onConfigLoad(final ModConfigEvent.Loading event)
-    {
-        Structurize.getConfig().onConfigLoad(event.getConfig());
-    }
-
-    @SubscribeEvent
-    public static void onConfigEdit(final ModConfigEvent.Reloading event)
-    {
-        Structurize.getConfig().onConfigReload(event.getConfig());
-    }
 }

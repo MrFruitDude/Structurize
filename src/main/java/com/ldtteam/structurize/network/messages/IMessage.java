@@ -1,8 +1,9 @@
 package com.ldtteam.structurize.network.messages;
 
+import com.ldtteam.structurize.network.NetworkContext;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -31,5 +32,5 @@ public interface IMessage
      * @param ctxIn           network context of incoming message
      * @param isLogicalServer whether message arrived at logical server side
      */
-    void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer);
+    void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer);
 }

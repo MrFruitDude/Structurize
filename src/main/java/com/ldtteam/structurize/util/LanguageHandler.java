@@ -5,8 +5,8 @@ import com.google.gson.reflect.TypeToken;
 import net.minecraft.client.Minecraft;
 import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.api.distmarker.Dist;
 import org.apache.commons.io.IOUtils;
 
 import java.io.InputStream;
@@ -104,12 +104,10 @@ public final class LanguageHandler
             final String defaultLocale = "en_us";
 
             // Trust me, Minecraft.getInstance() can be null, when you run Data Generators!
-            String locale =
-                DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance() == null ? null : Minecraft.getInstance().options.languageCode);
-
-            if (locale == null)
+            String locale = "en_us";
+            if (FMLEnvironment.getDist().isClient() && Minecraft.getInstance() != null)
             {
-                locale = defaultLocale;
+                locale = Minecraft.getInstance().options.languageCode;
             }
 
             InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(String.format(path, locale));

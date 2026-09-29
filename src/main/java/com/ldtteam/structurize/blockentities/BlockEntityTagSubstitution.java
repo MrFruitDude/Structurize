@@ -1,21 +1,26 @@
 package com.ldtteam.structurize.blockentities;
 
+import com.ldtteam.structurize.api.util.ItemStackUtils;
 import com.ldtteam.structurize.blockentities.interfaces.IBlueprintDataProviderBE;
 import com.ldtteam.structurize.blueprints.v1.Blueprint;
 import com.ldtteam.structurize.util.RotationMirror;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.util.Tuple;
+import com.ldtteam.structurize.api.util.Tuple;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -121,19 +126,24 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
     }
 
     @Override
-    public void load( @NotNull final CompoundTag compound)
+    protected void loadAdditional(@NotNull final ValueInput input)
     {
-        super.load(compound);
-        IBlueprintDataProviderBE.super.readSchematicDataFromNBT(compound);
-        this.replacement = new ReplacementBlock(compound);
+        super.loadAdditional(input);
+        input.read(IBlueprintDataProviderBE.TAG_BLUEPRINTDATA, CompoundTag.CODEC)
+            .ifPresent(IBlueprintDataProviderBE.super::readSchematicDataFromNBT);
+        this.replacement = input.read(ReplacementBlock.TAG_REPLACEMENT, CompoundTag.CODEC)
+            .<ReplacementBlock>map(ReplacementBlock::new)
+            .orElse(new ReplacementBlock());
     }
 
     @Override
-    public void saveAdditional(@NotNull final CompoundTag compound)
+    protected void saveAdditional(@NotNull final ValueOutput output)
     {
-        super.saveAdditional(compound);
-        writeSchematicDataToNBT(compound);
-        this.replacement.write(compound);
+        super.saveAdditional(output);
+        final CompoundTag schematicData = new CompoundTag();
+        writeSchematicDataToNBT(schematicData);
+        output.store(IBlueprintDataProviderBE.TAG_BLUEPRINTDATA, CompoundTag.CODEC, schematicData);
+        output.store(ReplacementBlock.TAG_REPLACEMENT, CompoundTag.CODEC, this.replacement.write(new CompoundTag()));
     }
 
     @Override
@@ -168,17 +178,15 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
 
     @NotNull
     @Override
-    public CompoundTag getUpdateTag()
+    public CompoundTag getUpdateTag(final HolderLookup.Provider registries)
     {
-        final CompoundTag tag = new CompoundTag();
-        this.saveAdditional(tag);
-        return tag;
+        return saveWithFullMetadata(registries);
     }
 
     @Override
-    public void onDataPacket(final Connection net, final ClientboundBlockEntityDataPacket packet)
+    public void onDataPacket(final Connection net, final ValueInput input)
     {
-        this.load(packet.getTag());
+        loadAdditional(input);
     }
 
     /**
@@ -194,6 +202,13 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
 
         @Nullable private BlockEntity cachedBlockentity;
 
+        private ReplacementBlock()
+        {
+            this.blockstate = net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
+            this.blockentitytag = new CompoundTag();
+            this.itemstack = ItemStack.EMPTY;
+        }
+
         /**
          * Construct
          * @param blockstate the block state
@@ -205,7 +220,9 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
                                 @NotNull final ItemStack itemstack)
         {
             this.blockstate = blockstate;
-            this.blockentitytag = blockentity == null ? new CompoundTag() : blockentity.saveWithFullMetadata();
+            this.blockentitytag = blockentity == null
+                ? new CompoundTag()
+                : blockentity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
             this.itemstack = itemstack;
         }
 
@@ -230,10 +247,12 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
          */
         public ReplacementBlock(@NotNull CompoundTag tag)
         {
-            final CompoundTag replacement = tag.getCompound(TAG_REPLACEMENT);
-            this.blockstate = NbtUtils.readBlockState(BuiltInRegistries.BLOCK.asLookup(), replacement.getCompound("b"));
-            this.blockentitytag = replacement.getCompound("e");
-            this.itemstack = replacement.contains("i") ? ItemStack.of(replacement.getCompound("i")) : ItemStack.EMPTY;
+            final CompoundTag replacement = tag.getCompoundOrEmpty(TAG_REPLACEMENT);
+            this.blockstate = NbtUtils.readBlockState(BuiltInRegistries.BLOCK, replacement.getCompoundOrEmpty("b"));
+            this.blockentitytag = replacement.getCompoundOrEmpty("e");
+            this.itemstack = replacement.contains("i")
+                ? ItemStackUtils.getItemStackFromNbt(replacement.getCompoundOrEmpty("i"))
+                : ItemStack.EMPTY;
         }
 
         /**
@@ -296,7 +315,11 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
         {
             return this.blockentitytag.isEmpty()
                     ? null
-                    : BlockEntity.loadStatic(pos, this.blockstate, this.blockentitytag);
+                    : BlockEntity.loadStatic(
+                        pos,
+                        this.blockstate,
+                        this.blockentitytag,
+                        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
         }
 
         /**
@@ -323,7 +346,7 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
                 {
                     replacement.put("e", this.blockentitytag);
                 }
-                replacement.put("i", this.itemstack.serializeNBT());
+                replacement.put("i", ItemStackUtils.writeToNbt(this.itemstack));
 
                 tag.put(TAG_REPLACEMENT, replacement);
             }

@@ -5,7 +5,7 @@ import com.ldtteam.structurize.client.rendertask.task.IRenderTask;
 import com.ldtteam.structurize.client.rendertask.task.TimedTask;
 import com.ldtteam.structurize.client.rendertask.util.WorldRenderMacros;
 import net.minecraft.core.BlockPos;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,9 +66,9 @@ public class TimedBlockRenderTask extends TimedTask implements IRenderTask
     }
 
     @Override
-    public boolean shouldRenderIn(final RenderLevelStageEvent.Stage renderStage)
+    public boolean shouldRenderIn(final Class<? extends RenderLevelStageEvent> renderStage)
     {
-        return renderStage == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES;
+        return renderStage == RenderLevelStageEvent.AfterOpaqueFeatures.class;
     }
 
     /**

@@ -1,22 +1,24 @@
 package com.ldtteam.structurize.client.rendertask.util;
 
 import com.ldtteam.blockui.UiRenderMacros;
-import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
-import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.MultiBufferSource.BufferSource;
-import net.minecraft.client.renderer.RenderType;
+import com.ldtteam.structurize.client.rendertask.util.BufferSourceCompat;
+import net.minecraft.gizmos.Gizmos;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.gizmos.TextGizmo;
+
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.util.FastColor;
+import net.minecraft.util.ARGB;
+import net.minecraft.util.Util;
 import net.minecraft.world.phys.AABB;
 import org.joml.Matrix4f;
 
@@ -37,7 +39,7 @@ public class WorldRenderMacros extends UiRenderMacros
     /**
      * Always use {@link #getBufferSource} when actually using the buffer source
      */
-    private static MultiBufferSource.BufferSource bufferSource;
+    private static BufferSourceCompat bufferSource;
 
     /**
      * Put type at the first position.
@@ -103,13 +105,11 @@ public class WorldRenderMacros extends UiRenderMacros
         putBufferTail(WorldRenderMacros.COLORED_TRIANGLES_NC_ND);
     }
 
-    public static MultiBufferSource.BufferSource getBufferSource()
+    public static BufferSourceCompat getBufferSource()
     {
         if (bufferSource == null)
         {
-            bufferSource = MultiBufferSource.immediateWithBuffers(Util.make(new Object2ObjectLinkedOpenHashMap<>(), map -> {
-                buffers.forEach(type -> map.put(type, new BufferBuilder(type.bufferSize())));
-            }), Tesselator.getInstance().getBuilder());
+            bufferSource = new BufferSourceCompat();
         }
         return bufferSource;
     }
@@ -120,7 +120,7 @@ public class WorldRenderMacros extends UiRenderMacros
      * @param posA The first Position
      * @param posB The second Position
      */
-    public static void renderBlackLineBox(final BufferSource buffer,
+    public static void renderBlackLineBox(final BufferSourceCompat buffer,
         final PoseStack ps,
         final BlockPos posA,
         final BlockPos posB,
@@ -135,7 +135,7 @@ public class WorldRenderMacros extends UiRenderMacros
      * @param posA The first Position
      * @param posB The second Position
      */
-    public static void renderRedGlintLineBox(final BufferSource buffer,
+    public static void renderRedGlintLineBox(final BufferSourceCompat buffer,
         final PoseStack ps,
         final BlockPos posA,
         final BlockPos posB,
@@ -150,7 +150,7 @@ public class WorldRenderMacros extends UiRenderMacros
      * @param posA The first Position
      * @param posB The second Position
      */
-    public static void renderWhiteLineBox(final BufferSource buffer,
+    public static void renderWhiteLineBox(final BufferSourceCompat buffer,
         final PoseStack ps,
         final BlockPos posA,
         final BlockPos posB,
@@ -258,8 +258,13 @@ public class WorldRenderMacros extends UiRenderMacros
     /**
      * Render a box around two positions
      *
-     * @param posA First position
-     * @param posB Second position
+     * @param posA First position.
+     * @param posB Second position.
+     * @param red Red component.
+     * @param green Green component.
+     * @param blue Blue component.
+     * @param alpha Alpha component.
+     * @param lineWidth Line width.
      */
     public static void renderLineBox(final VertexConsumer buffer,
         final PoseStack ps,
@@ -289,8 +294,12 @@ public class WorldRenderMacros extends UiRenderMacros
     /**
      * Render a box around two positions
      *
-     * @param posA First position
-     * @param posB Second position
+     * @param minX Minimum X coordinate.
+     * @param minY Minimum Y coordinate.
+     * @param minZ Minimum Z coordinate.
+     * @param maxX Maximum X coordinate.
+     * @param maxY Maximum Y coordinate.
+     * @param maxZ Maximum Z coordinate.
      */
     public static void renderLineBox(final VertexConsumer buffer,
         final PoseStack ps,
@@ -327,11 +336,22 @@ public class WorldRenderMacros extends UiRenderMacros
         final float maxZ2 = maxZ - lineWidth;
 
         final Matrix4f m = ps.last().pose();
-        buffer.defaultColor(red, green, blue, alpha);
-
-        populateRenderLineBox(minX, minY, minZ, minX2, minY2, minZ2, maxX, maxY, maxZ, maxX2, maxY2, maxZ2, m, buffer);
-
-        buffer.unsetDefaultColor();
+        populateRenderLineBox(
+            minX,
+            minY,
+            minZ,
+            minX2,
+            minY2,
+            minZ2,
+            maxX,
+            maxY,
+            maxZ,
+            maxX2,
+            maxY2,
+            maxZ2,
+            (alpha << 24) | (red << 16) | (green << 8) | blue,
+            m,
+            buffer);
     }
 
     // TODO: ebo this, does vanilla have any ebo things?
@@ -347,419 +367,420 @@ public class WorldRenderMacros extends UiRenderMacros
         final float maxX2,
         final float maxY2,
         final float maxZ2,
+        final int argbColor,
         final Matrix4f m,
         final VertexConsumer buf)
     {
         // z plane
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ).endVertex();
-        buf.vertex(m, maxX, minY, minZ).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, minX2, minY2, minZ).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, minX2, maxY2, minZ).endVertex();
-        buf.vertex(m, minX2, minY2, minZ).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, minX, maxY, minZ).endVertex();
-        buf.vertex(m, minX2, maxY2, minZ).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, minZ).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
-        buf.vertex(m, minX2, maxY2, minZ).endVertex();
-        buf.vertex(m, minX, maxY, minZ).endVertex();
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX2, maxY2, minZ).endVertex();
-        buf.vertex(m, minX2, maxY2, minZ).endVertex();
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, minZ).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ).endVertex();
-        buf.vertex(m, maxX2, maxY2, minZ).endVertex();
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, minZ).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX, minY, minZ).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ).endVertex();
-
-        //
-
-        buf.vertex(m, minX, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
-
-        buf.vertex(m, minX, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX, minY2, minZ2).endVertex();
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-        buf.vertex(m, minX2, minY, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY, minZ2).endVertex();
-
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
-
-        buf.vertex(m, maxX, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
-
-        buf.vertex(m, maxX, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
-        buf.vertex(m, maxX, minY2, minZ2).endVertex();
-
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, maxY, minZ2).endVertex();
-        buf.vertex(m, minX2, maxY, minZ2).endVertex();
-
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, maxY, minZ2).endVertex();
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ).setColor(argbColor);
 
         //
 
-        buf.vertex(m, minX, maxY2, maxZ2).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ2).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
+        buf.addVertex(m, minX, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY2, maxZ2).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, minX, minY2, maxZ2).endVertex();
+        buf.addVertex(m, minX, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY, maxZ2).endVertex();
-        buf.vertex(m, minX2, minY, maxZ2).endVertex();
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY, maxZ2).endVertex();
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY2, maxZ2).endVertex();
-        buf.vertex(m, maxX, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX2, maxY2, maxZ2).endVertex();
-        buf.vertex(m, minX2, maxY, maxZ2).endVertex();
-        buf.vertex(m, maxX2, maxY, maxZ2).endVertex();
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX2, maxY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, maxY, maxZ2).endVertex();
-        buf.vertex(m, maxX2, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, minZ2).setColor(argbColor);
 
         //
 
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ).endVertex();
+        buf.addVertex(m, minX, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ).endVertex();
+        buf.addVertex(m, minX, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ).endVertex();
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ).endVertex();
+        buf.addVertex(m, maxX, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, maxX2, maxY2, maxZ).endVertex();
+        buf.addVertex(m, maxX, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ).endVertex();
+        buf.addVertex(m, minX2, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ).endVertex();
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
+        buf.addVertex(m, minX2, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, maxZ2).setColor(argbColor);
+
+        //
+
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ).setColor(argbColor);
+
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ).setColor(argbColor);
+
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ).setColor(argbColor);
+
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, maxZ).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
 
         // x plane
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, minX, minY2, maxZ2).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, minX, minY2, maxZ2).endVertex();
-        buf.vertex(m, minX, minY2, minZ2).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, minX, minY2, minZ2).endVertex();
-        buf.vertex(m, minX, maxY2, minZ2).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX, maxY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, minX, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX, maxY, minZ).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX, maxY, minZ).endVertex();
-        buf.vertex(m, minX, maxY2, minZ2).endVertex();
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX, maxY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX, maxY2, maxZ2).endVertex();
-        buf.vertex(m, minX, minY2, maxZ2).endVertex();
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX, minY2, maxZ2).endVertex();
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-
-        //
-
-        buf.vertex(m, minX2, maxY2, minZ).endVertex();
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-
-        buf.vertex(m, minX2, maxY2, minZ).endVertex();
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-        buf.vertex(m, minX2, minY2, minZ).endVertex();
-
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-        buf.vertex(m, minX2, minY, maxZ2).endVertex();
-        buf.vertex(m, minX2, minY, minZ2).endVertex();
-
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, minX2, minY, maxZ2).endVertex();
-
-        buf.vertex(m, minX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ2).endVertex();
-
-        buf.vertex(m, minX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
-
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX2, maxY, minZ2).endVertex();
-        buf.vertex(m, minX2, maxY, maxZ2).endVertex();
-
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX2, maxY, maxZ2).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
 
         //
 
-        buf.vertex(m, maxX2, maxY2, minZ).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, maxY2, minZ2).endVertex();
+        buf.addVertex(m, minX2, maxY2, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, minZ).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
+        buf.addVertex(m, minX2, maxY2, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ).setColor(argbColor);
 
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY, maxZ2).endVertex();
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ2).endVertex();
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, maxX2, maxY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ2).endVertex();
+        buf.addVertex(m, minX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ).endVertex();
+        buf.addVertex(m, minX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, maxY, maxZ2).endVertex();
-        buf.vertex(m, maxX2, maxY, minZ2).endVertex();
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, maxY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, maxY, maxZ2).endVertex();
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ2).setColor(argbColor);
 
         //
 
-        buf.vertex(m, maxX, minY, minZ).endVertex();
-        buf.vertex(m, maxX, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
+        buf.addVertex(m, maxX2, maxY2, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, minY, minZ).endVertex();
-        buf.vertex(m, maxX, minY2, minZ2).endVertex();
-        buf.vertex(m, maxX, minY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, maxY2, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, minY, minZ).endVertex();
-        buf.vertex(m, maxX, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX, minY2, minZ2).endVertex();
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, minY, minZ).endVertex();
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX, maxY2, minZ2).endVertex();
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
+        buf.addVertex(m, maxX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX, maxY2, maxZ2).endVertex();
-        buf.vertex(m, maxX, maxY2, minZ2).endVertex();
+        buf.addVertex(m, maxX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX, minY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, maxZ2).setColor(argbColor);
+
+        //
+
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, maxZ2).setColor(argbColor);
+
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, minZ2).setColor(argbColor);
+
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY2, minZ2).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY2, minZ2).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY2, maxZ2).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, maxZ2).setColor(argbColor);
 
         // y plane
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, minX2, minY, maxZ2).endVertex();
-        buf.vertex(m, minX, minY, maxZ).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, minX2, minY, minZ2).endVertex();
-        buf.vertex(m, minX2, minY, maxZ2).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, maxX2, minY, minZ2).endVertex();
-        buf.vertex(m, minX2, minY, minZ2).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, maxX, minY, minZ).endVertex();
-        buf.vertex(m, maxX2, minY, minZ2).endVertex();
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX2, minY, minZ2).endVertex();
-        buf.vertex(m, maxX, minY, minZ).endVertex();
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
 
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX2, minY, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY, minZ2).endVertex();
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
-        buf.vertex(m, minX2, minY, maxZ2).endVertex();
-        buf.vertex(m, maxX2, minY, maxZ2).endVertex();
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, minX2, minY, maxZ2).endVertex();
-
-        //
-
-        buf.vertex(m, maxX2, minY2, minZ).endVertex();
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
-
-        buf.vertex(m, maxX2, minY2, minZ).endVertex();
-        buf.vertex(m, minX2, minY2, minZ).endVertex();
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-        buf.vertex(m, minX, minY2, minZ2).endVertex();
-        buf.vertex(m, minX, minY2, maxZ2).endVertex();
-
-        buf.vertex(m, minX2, minY2, minZ2).endVertex();
-        buf.vertex(m, minX, minY2, maxZ2).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
-
-        buf.vertex(m, maxX2, minY2, maxZ).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
-
-        buf.vertex(m, maxX2, minY2, maxZ).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, minX2, minY2, maxZ).endVertex();
-
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
-        buf.vertex(m, maxX, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX, minY2, minZ2).endVertex();
-
-        buf.vertex(m, maxX2, minY2, minZ2).endVertex();
-        buf.vertex(m, maxX2, minY2, maxZ2).endVertex();
-        buf.vertex(m, maxX, minY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY, maxZ2).setColor(argbColor);
 
         //
 
-        buf.vertex(m, maxX2, maxY2, minZ).endVertex();
-        buf.vertex(m, maxX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
+        buf.addVertex(m, maxX2, minY2, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, minZ).endVertex();
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX2, maxY2, minZ).endVertex();
+        buf.addVertex(m, maxX2, minY2, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX, maxY2, maxZ2).endVertex();
-        buf.vertex(m, minX, maxY2, minZ2).endVertex();
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, minX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ2).endVertex();
-        buf.vertex(m, minX, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, minX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, minY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ).endVertex();
-        buf.vertex(m, minX2, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, minY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, minY2, maxZ).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX2, maxY2, minZ2).endVertex();
-        buf.vertex(m, maxX, maxY2, maxZ2).endVertex();
-        buf.vertex(m, maxX2, maxY2, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, minY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, minY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, minY2, maxZ2).setColor(argbColor);
 
         //
 
-        buf.vertex(m, minX, maxY, minZ).endVertex();
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX2, maxY, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, maxY2, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, minZ).endVertex();
-        buf.vertex(m, minX2, maxY, maxZ2).endVertex();
-        buf.vertex(m, minX2, maxY, minZ2).endVertex();
+        buf.addVertex(m, maxX2, maxY2, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, minZ).endVertex();
-        buf.vertex(m, minX2, maxY, minZ2).endVertex();
-        buf.vertex(m, maxX2, maxY, minZ2).endVertex();
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX, maxY2, minZ2).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX2, maxY, minZ2).endVertex();
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
+        buf.addVertex(m, minX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX, maxY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX2, maxY, minZ2).endVertex();
+        buf.addVertex(m, maxX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX2, maxY, minZ2).endVertex();
-        buf.vertex(m, maxX2, maxY, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX2, maxY, maxZ2).endVertex();
-        buf.vertex(m, minX2, maxY, maxZ2).endVertex();
+        buf.addVertex(m, maxX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY2, maxZ2).setColor(argbColor);
 
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX2, maxY, maxZ2).endVertex();
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
+        buf.addVertex(m, maxX2, maxY2, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY2, maxZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY2, maxZ2).setColor(argbColor);
+
+        //
+
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, maxZ2).setColor(argbColor);
+
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, minZ2).setColor(argbColor);
+
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, minZ2).setColor(argbColor);
+
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, minZ2).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, minZ2).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, maxZ2).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX2, maxY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, maxZ2).setColor(argbColor);
+
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX2, maxY, maxZ2).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
     }
 
-    public static void renderBox(final BufferSource buffer,
+    public static void renderBox(final BufferSourceCompat buffer,
         final PoseStack ps,
         final BlockPos posA,
         final BlockPos posB,
@@ -798,11 +819,9 @@ public class WorldRenderMacros extends UiRenderMacros
         final float maxZ = Math.max(posA.getZ(), posB.getZ()) + 1;
 
         final Matrix4f m = ps.last().pose();
-        buffer.defaultColor(red, green, blue, alpha);
+        final int argbColor = (alpha << 24) | (red << 16) | (green << 8) | blue;
 
-        populateCuboid(minX, minY, minZ, maxX, maxY, maxZ, m, buffer);
-
-        buffer.unsetDefaultColor();
+        populateCuboid(minX, minY, minZ, maxX, maxY, maxZ, argbColor, m, buffer);
     }
 
     public static void populateCuboid(final float minX,
@@ -811,65 +830,66 @@ public class WorldRenderMacros extends UiRenderMacros
         final float maxX,
         final float maxY,
         final float maxZ,
+        final int argbColor,
         final Matrix4f m,
         final VertexConsumer buf)
     {
         // z plane
 
-        buf.vertex(m, minX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX, minY, minZ).endVertex();
-        buf.vertex(m, minX, minY, minZ).endVertex();
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX, minY, minZ).endVertex();
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
 
         // y plane
 
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, minX, minY, minZ).endVertex();
-        buf.vertex(m, maxX, minY, minZ).endVertex();
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX, minY, minZ).endVertex();
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
-        buf.vertex(m, minX, maxY, minZ).endVertex();
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
 
         // x plane
 
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, minX, maxY, minZ).endVertex();
-        buf.vertex(m, minX, minY, minZ).endVertex();
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, minX, minY, minZ).setColor(argbColor);
 
-        buf.vertex(m, minX, minY, maxZ).endVertex();
-        buf.vertex(m, minX, maxY, maxZ).endVertex();
-        buf.vertex(m, minX, maxY, minZ).endVertex();
+        buf.addVertex(m, minX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, maxZ).setColor(argbColor);
+        buf.addVertex(m, minX, maxY, minZ).setColor(argbColor);
 
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX, minY, minZ).endVertex();
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, minY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
 
-        buf.vertex(m, maxX, minY, maxZ).endVertex();
-        buf.vertex(m, maxX, maxY, minZ).endVertex();
-        buf.vertex(m, maxX, maxY, maxZ).endVertex();
+        buf.addVertex(m, maxX, minY, maxZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, minZ).setColor(argbColor);
+        buf.addVertex(m, maxX, maxY, maxZ).setColor(argbColor);
     }
 
-    public static void renderFillRectangle(final BufferSource buffer,
+    public static void renderFillRectangle(final BufferSourceCompat buffer,
         final PoseStack ps,
         final int x,
         final int y,
@@ -908,13 +928,15 @@ public class WorldRenderMacros extends UiRenderMacros
             return;
         }
 
-        buffer.vertex(m, x, y, z).color(red, green, blue, alpha).endVertex();
-        buffer.vertex(m, x, y + h, z).color(red, green, blue, alpha).endVertex();
-        buffer.vertex(m, x + w, y + h, z).color(red, green, blue, alpha).endVertex();
+        final int argbColor = (alpha << 24) | (red << 16) | (green << 8) | blue;
         
-        buffer.vertex(m, x, y, z).color(red, green, blue, alpha).endVertex();
-        buffer.vertex(m, x + w, y + h, z).color(red, green, blue, alpha).endVertex();
-        buffer.vertex(m, x + w, y, z).color(red, green, blue, alpha).endVertex();
+        buffer.addVertex(m, x, y, z).setColor(argbColor);
+        buffer.addVertex(m, x, y + h, z).setColor(argbColor);
+        buffer.addVertex(m, x + w, y + h, z).setColor(argbColor);
+        
+        buffer.addVertex(m, x, y, z).setColor(argbColor);
+        buffer.addVertex(m, x + w, y + h, z).setColor(argbColor);
+        buffer.addVertex(m, x + w, y, z).setColor(argbColor);
     }
 
     /**
@@ -932,7 +954,7 @@ public class WorldRenderMacros extends UiRenderMacros
         final PoseStack matrixStack,
         final boolean forceWhite,
         final int mergeEveryXListElements,
-        final MultiBufferSource buffer)
+        final BufferSourceCompat buffer)
     {
         renderDebugText(pos, pos, text, matrixStack, forceWhite, mergeEveryXListElements, buffer);
     }
@@ -955,7 +977,7 @@ public class WorldRenderMacros extends UiRenderMacros
         final PoseStack matrixStack,
         final boolean forceWhite,
         final int mergeEveryXListElements,
-        final MultiBufferSource buffer)
+        final BufferSourceCompat buffer)
     {
         if (mergeEveryXListElements < 1)
         {
@@ -964,13 +986,13 @@ public class WorldRenderMacros extends UiRenderMacros
 
         final EntityRenderDispatcher erm = Minecraft.getInstance().getEntityRenderDispatcher();
         final int cap = text.size();
-        if (cap > 0 && erm.distanceToSqr(worldPos.getX(), worldPos.getY(), worldPos.getZ()) <= MAX_DEBUG_TEXT_RENDER_DIST_SQUARED)
+        if (cap > 0 && Minecraft.getInstance().gameRenderer.mainCamera().position().distanceToSqr(worldPos.getX(), worldPos.getY(), worldPos.getZ()) <= MAX_DEBUG_TEXT_RENDER_DIST_SQUARED)
         {
             final Font fontrenderer = Minecraft.getInstance().font;
 
             matrixStack.pushPose();
             matrixStack.translate(renderPos.getX() + 0.5d, renderPos.getY() + 0.6d, renderPos.getZ() + 0.5d);
-            matrixStack.mulPose(erm.cameraOrientation());
+            matrixStack.mulPose(erm.camera.rotation());
             matrixStack.scale(-0.014f, -0.014f, 0.014f);
 
             final float backgroundTextOpacity = 0f;
@@ -984,21 +1006,20 @@ public class WorldRenderMacros extends UiRenderMacros
                     mergeEveryXListElements == 1 ? text.get(i) : text.subList(i, Math.min(i + mergeEveryXListElements, cap)).toString());
                 final float textCenterShift = (float) (-fontrenderer.width(renderText) / 2);
 
-                fontrenderer.drawInBatch(renderText,
-                    textCenterShift,
-                    0,
-                    forceWhite ? 0xffffffff : 0x20ffffff,
-                    false,
-                    rawPosMatrix,
-                    buffer,
-                    Font.DisplayMode.SEE_THROUGH,
-                    alphaMask,
-                    0x00f000f0);
+                final Vec3 textWorldPos = new Vec3(
+                    renderPos.getX() + 0.5d,
+                    renderPos.getY() + 0.6d + i * (fontrenderer.lineHeight + 1) * 0.014f,
+                    renderPos.getZ() + 0.5d);
+
+                Gizmos.billboardText(renderText.getString(),
+                    textWorldPos,
+                    TextGizmo.Style.forColorAndCentered(forceWhite ? 0xffffffff : 0x20ffffff));
                 if (!forceWhite)
                 {
-                    fontrenderer.drawInBatch(renderText, textCenterShift, 0, 0xffffffff, false, rawPosMatrix, buffer, Font.DisplayMode.NORMAL, 0, 0x00f000f0);
+                    Gizmos.billboardText(renderText.getString(),
+                        textWorldPos,
+                        TextGizmo.Style.forColorAndCentered(0xffffffff));
                 }
-                matrixStack.translate(0.0d, fontrenderer.lineHeight + 1, 0.0d);
             }
 
             matrixStack.popPose();
@@ -1016,7 +1037,7 @@ public class WorldRenderMacros extends UiRenderMacros
      * @param showThroughBlocks true to render through existing blocks, false to only render in air
      */
     public static void renderLineBox(
-        final PoseStack poseStack, final MultiBufferSource.BufferSource bufferSource,
+        final PoseStack poseStack, final BufferSourceCompat bufferSource,
         final AABB bounds, final float width, final int color, final boolean showThroughBlocks)
     {
         final float halfLine = width / 2.0f;
@@ -1034,10 +1055,10 @@ public class WorldRenderMacros extends UiRenderMacros
         final float maxY2 = maxY - width;
         final float maxZ2 = maxZ - width;
 
-        final int red = FastColor.ARGB32.red(color);
-        final int green = FastColor.ARGB32.green(color);
-        final int blue = FastColor.ARGB32.blue(color);
-        final int alpha = FastColor.ARGB32.alpha(color);
+        final int red = ARGB.red(color);
+        final int green = ARGB.green(color);
+        final int blue = ARGB.blue(color);
+        final int alpha = ARGB.alpha(color);
 
         if (showThroughBlocks)
         {
@@ -1052,14 +1073,13 @@ public class WorldRenderMacros extends UiRenderMacros
     }
 
     /**
-     * Call after a series of {@link #renderLineBox(PoseStack, MultiBufferSource.BufferSource, AABB, float, int, boolean)}
+     * Call after a series of {@link #renderLineBox(PoseStack, BufferSourceCompat, AABB, float, int, boolean)}
      *
      * @param bufferSource buffer source
      */
-    public static void endRenderLineBox(final MultiBufferSource.BufferSource bufferSource)
+    public static void endRenderLineBox(final BufferSourceCompat bufferSource)
     {
-        bufferSource.endBatch(RenderTypes.LINES_INSIDE_BLOCKS);
-        bufferSource.endBatch(RenderTypes.LINES_OUTSIDE_BLOCKS);
+        bufferSource.endBatch();
     }
 
     /**
@@ -1092,8 +1112,22 @@ public class WorldRenderMacros extends UiRenderMacros
         final float maxX2, final float maxY2, final float maxZ2,
         final int red, final int green, final int blue, final int alpha)
     {
-        buffer.defaultColor(red, green, blue, alpha);
-        WorldRenderMacros.populateRenderLineBox(minX, minY, minZ, minX2, minY2, minZ2, maxX, maxY, maxZ, maxX2, maxY2, maxZ2, poseStack.last().pose(), buffer);
-        buffer.unsetDefaultColor();
+        final int argbColor = (alpha << 24) | (red << 16) | (green << 8) | blue;
+        WorldRenderMacros.populateRenderLineBox(
+            minX,
+            minY,
+            minZ,
+            minX2,
+            minY2,
+            minZ2,
+            maxX,
+            maxY,
+            maxZ,
+            maxX2,
+            maxY2,
+            maxZ2,
+            argbColor,
+            poseStack.last().pose(),
+            buffer);
     }
 }

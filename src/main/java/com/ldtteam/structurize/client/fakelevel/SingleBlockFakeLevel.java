@@ -5,7 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.jetbrains.annotations.Nullable;
 import java.util.Collection;
 import java.util.function.Consumer;
@@ -40,7 +40,7 @@ public class SingleBlockFakeLevel extends FakeLevel
      * @param blockState  related to blockEntity
      * @param blockEntity related to blockState
      * @param realLevel   actual valid vanilla instance to provide eg. registries
-     * @see #unset(FakeLevel, BlockEntity)
+     * @see #unset(BlockEntity)
      * @see FakeLevel#setEntities(Collection) FakeLevel#setEntities(Collection) if you want to add entities, do not forget to reset
      */
     public void prepare(final BlockState blockState, @Nullable final BlockEntity blockEntity, final Level realLevel)
@@ -57,7 +57,7 @@ public class SingleBlockFakeLevel extends FakeLevel
 
     /**
      * @param blockEntity to unlink level if needed
-     * @see #prepare(FakeLevel, BlockState, BlockEntity, Level)
+     * @see #prepare(BlockState, BlockEntity, Level)
      */
     public void unset(@Nullable final BlockEntity blockEntity)
     {
@@ -85,8 +85,8 @@ public class SingleBlockFakeLevel extends FakeLevel
      * @param blockEntity related to blockState
      * @param realLevel   actual valid vanilla instance to provide eg. registries
      * @param action      context action
-     * @see #prepare(FakeLevel, BlockState, BlockEntity, Level)
-     * @see #unset(FakeLevel, BlockEntity)
+     * @see #prepare(BlockState, BlockEntity, Level)
+     * @see #unset(BlockEntity)
      */
     public void withFakeLevelContext(final BlockState blockState,
         @Nullable final BlockEntity blockEntity,
@@ -105,8 +105,8 @@ public class SingleBlockFakeLevel extends FakeLevel
      * @param blockEntity related to blockState
      * @param realLevel   actual valid vanilla instance to provide eg. registries
      * @param action      context action
-     * @see #prepare(FakeLevel, BlockState, BlockEntity, Level)
-     * @see #unset(FakeLevel, BlockEntity)
+     * @see #prepare(BlockState, BlockEntity, Level)
+     * @see #unset(BlockEntity)
      */
     public <T> T useFakeLevelContext(final BlockState blockState,
         @Nullable final BlockEntity blockEntity,
@@ -155,11 +155,17 @@ public class SingleBlockFakeLevel extends FakeLevel
         }
 
         @Override
+        public short getSizeY()
+        {
+            return 1;
+        }
+
+        @Override
         public void describeSelfInCrashReport(final CrashReportCategory category)
         {
             category.setDetail("Single block", blockState::toString);
             category.setDetail("Single block entity type",
-                () -> blockEntity == null ? null : ForgeRegistries.BLOCK_ENTITY_TYPES.getKey(blockEntity.getType()).toString());
+                () -> blockEntity == null ? null : BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntity.getType()).toString());
         }
     }
 

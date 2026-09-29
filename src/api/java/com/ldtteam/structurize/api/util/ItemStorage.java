@@ -1,6 +1,6 @@
 package com.ldtteam.structurize.api.util;
 
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -94,9 +94,9 @@ public class ItemStorage
      *
      * @param buf
      */
-    public ItemStorage(final FriendlyByteBuf buf)
+    public ItemStorage(final RegistryFriendlyByteBuf buf)
     {
-        this.stack = buf.readItem();
+        this.stack = ItemStack.OPTIONAL_STREAM_CODEC.decode(buf);
         this.shouldIgnoreDamageValue = buf.readBoolean();
         this.shouldIgnoreNBTValue = buf.readBoolean();
         this.amount = buf.readInt();
@@ -217,9 +217,9 @@ public class ItemStorage
      * Serialize itemstorage to buffer
      * @param buf
      */
-    public void serialize(final FriendlyByteBuf buf)
+    public void serialize(final RegistryFriendlyByteBuf buf)
     {
-        buf.writeItem(getItemStack());
+        ItemStack.OPTIONAL_STREAM_CODEC.encode(buf, getItemStack());
         buf.writeBoolean(ignoreDamageValue());
         buf.writeBoolean(ignoreNBTValue());
         buf.writeInt(getAmount());

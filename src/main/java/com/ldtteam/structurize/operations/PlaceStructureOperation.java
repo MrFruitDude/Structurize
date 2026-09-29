@@ -55,7 +55,7 @@ public class PlaceStructureOperation extends BaseOperation
     @Override
     public boolean apply(final ServerLevel world)
     {
-        if (placer.isReady() && placer.getHandler().getWorld().dimension().location().equals(world.dimension().location()))
+        if (placer.isReady() && placer.getHandler().getWorld().dimension().identifier().equals(world.dimension().identifier()))
         {
             StructurePhasePlacementResult result;
             switch (structurePhase)

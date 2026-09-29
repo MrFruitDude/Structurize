@@ -11,17 +11,24 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.core.particles.ExplosionParticleInfo;
+import net.minecraft.util.random.WeightedList;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.AbortableIterationConsumer.Continuation;
-import net.minecraft.util.profiling.ProfilerFiller;
+import net.minecraft.world.TickRateManager;
+import net.minecraft.world.clock.ClockManager;
+import net.minecraft.world.attribute.EnvironmentAttributeSystem;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageSources;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.item.alchemy.PotionBrewing;
+import net.minecraft.world.item.crafting.RecipeAccess;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
@@ -31,14 +38,16 @@ import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.FuelValues;
 import net.minecraft.world.level.block.entity.TickingBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkSource;
-import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.entity.LevelEntityGetter;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -52,8 +61,6 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.world.ticks.BlackholeTickAccess;
 import net.minecraft.world.ticks.LevelTickAccess;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.util.LazyOptional;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
@@ -100,6 +107,7 @@ public class FakeLevel extends Level
     protected final FakeChunkSource chunkSource;
     protected final FakeLevelLightEngine lightEngine;
     protected FakeLevelEntityGetterAdapter levelEntityGetter = FakeLevelEntityGetterAdapter.EMPTY;
+    private int nextEntityId = 1;
     // TODO: this is currently manually filled by class user - ideally if not filled yet this should get constructed from levelSource
     // manually
     protected Map<BlockPos, BlockEntity> blockEntities = Collections.emptyMap();
@@ -127,11 +135,10 @@ public class FakeLevel extends Level
         @Nullable final Scoreboard scoreboard,
         final boolean overrideBeLevel)
     {
-        super(new FakeLevelData(clientLevel()::getLevelData, lightProvider),
+        super(new FakeLevelData(() -> clientLevel(), lightProvider),
             clientLevel().dimension(),
             clientLevel().registryAccess(),
             clientLevel().dimensionTypeRegistration(),
-            clientLevel().getProfilerSupplier(),
             clientLevel().isClientSide(),
             false,
             0,
@@ -145,7 +152,6 @@ public class FakeLevel extends Level
         this.lightEngine = new FakeLevelLightEngine(this);
 
         setRealLevel(clientLevel());
-        ((FakeLevelData) getLevelData()).vanillaLevelData = () -> realLevel().getLevelData();
     }
 
     // ========================================
@@ -165,9 +171,14 @@ public class FakeLevel extends Level
             return;
         }
 
-        if (realLevel != null && realLevel.isClientSide != this.isClientSide)
+        if (realLevel != null && realLevel.isClientSide() != this.isClientSide())
         {
-            throw new IllegalArgumentException("Received wrong sided realLevel - fakeLevel.isClientSide = " + this.isClientSide);
+            throw new IllegalArgumentException("Received wrong sided realLevel - fakeLevel.isClientSide = " + this.isClientSide());
+        }
+
+        if (realLevel instanceof final ClientLevel clientLevel)
+        {
+            ((FakeLevelData) getLevelData()).vanillaLevel = () -> clientLevel;
         }
 
         this.realLevel = realLevel;
@@ -229,6 +240,20 @@ public class FakeLevel extends Level
         levelEntityGetter = entities.isEmpty() ? FakeLevelEntityGetterAdapter.EMPTY : FakeLevelEntityGetterAdapter.ofEntities(entities);
     }
 
+    /**
+     * Minecraft 26.2 requires every entity to receive a non-zero id before it
+     * is registered with an {@link net.minecraft.world.level.entity.EntityLookup}.
+     * The base client/server level implementations provide that allocator, but
+     * the immutable fake level inherits the base fallback (zero). Blueprint
+     * entities are created in this level, so give them ids at construction time
+     * just like a real level would.
+     */
+    @Override
+    public int getNextEntityId()
+    {
+        return nextEntityId++;
+    }
+
     // ========================================
     // ======= CTOR REAL LEVEL REDIRECTS ======
     // ========================================
@@ -253,18 +278,6 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public ProfilerFiller getProfiler()
-    {
-        return realLevel() != null ? realLevel().getProfiler() : super.getProfiler();
-    }
-
-    @Override
-    public Supplier<ProfilerFiller> getProfilerSupplier()
-    {
-        return realLevel() != null ? realLevel().getProfilerSupplier() : super.getProfilerSupplier();
-    }
-
-    @Override
     public DimensionType dimensionType()
     {
         return realLevel() != null ? realLevel().dimensionType() : super.dimensionType();
@@ -279,7 +292,8 @@ public class FakeLevel extends Level
     @Override
     public WorldBorder getWorldBorder()
     {
-        return realLevel() != null ? realLevel().getWorldBorder() : super.getWorldBorder();
+        final Level level = realLevel();
+        return level != null ? level.getWorldBorder() : new WorldBorder();
     }
 
     // ========================================
@@ -298,7 +312,6 @@ public class FakeLevel extends Level
         return blockEntity;
     }
 
-    @Override
     @Nullable
     public BlockEntity getExistingBlockEntity(BlockPos pos)
     {
@@ -352,12 +365,6 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public boolean isDay()
-    {
-        return !this.dimensionType().hasFixedTime() && this.getSkyDarken() < 4;
-    }
-
-    @Override
     public Scoreboard getScoreboard()
     {
         return scoreboard == null ? realLevel().getScoreboard() : scoreboard;
@@ -376,9 +383,14 @@ public class FakeLevel extends Level
     }
 
     @Override
+    public int getMinY()
+    {
+        return levelSource.getMinY();
+    }
+
     public int getMinBuildHeight()
     {
-        return levelSource.getMinBuildHeight();
+        return getMinY();
     }
 
     @Override
@@ -426,7 +438,7 @@ public class FakeLevel extends Level
 
         if (levelSource.isPosInside(pos))
         {
-            for (int y = levelSource.getMaxBuildHeight() - 1; y >= levelSource.getMinBuildHeight(); y--)
+            for (int y = levelSource.getMaxY() - 1; y >= levelSource.getMinY(); y--)
             {
                 pos.setY(y);
                 if (heightmapType.isOpaque().test(levelSource.getBlockState(pos)))
@@ -458,12 +470,6 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public float getShade(Direction p_104703_, boolean p_104704_)
-    {
-        return realLevel().getShade(p_104703_, p_104704_);
-    }
-
-    @Override
     public Holder<Biome> getBiome(BlockPos pos)
     {
         return realLevel().getBiome(worldPos.offset(pos));
@@ -476,9 +482,57 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public RecipeManager getRecipeManager()
+    public RecipeAccess recipeAccess()
     {
-        return realLevel().getRecipeManager();
+        return realLevel().recipeAccess();
+    }
+
+    @Override
+    public TickRateManager tickRateManager()
+    {
+        return realLevel().tickRateManager();
+    }
+
+    @Override
+    public ClockManager clockManager()
+    {
+        return realLevel().clockManager();
+    }
+
+    @Override
+    public EnvironmentAttributeSystem environmentAttributes()
+    {
+        return realLevel().environmentAttributes();
+    }
+
+    @Override
+    public PotionBrewing potionBrewing()
+    {
+        return realLevel().potionBrewing();
+    }
+
+    @Override
+    public FuelValues fuelValues()
+    {
+        return realLevel().fuelValues();
+    }
+
+    @Override
+    public void setRespawnData(final LevelData.RespawnData respawnData)
+    {
+        realLevel().setRespawnData(respawnData);
+    }
+
+    @Override
+    public LevelData.RespawnData getRespawnData()
+    {
+        return realLevel().getRespawnData();
+    }
+
+    @Override
+    public Collection<? extends net.neoforged.neoforge.entity.PartEntity<?>> dragonParts()
+    {
+        return realLevel().dragonParts();
     }
 
     @Override
@@ -504,16 +558,19 @@ public class FakeLevel extends Level
     // ========================================
 
     @Override
-    public Explosion explode(@javax.annotation.Nullable Entity p_256233_,
-        @javax.annotation.Nullable DamageSource p_255861_,
-        @javax.annotation.Nullable ExplosionDamageCalculator p_255867_,
-        double p_256447_,
-        double p_255732_,
-        double p_255717_,
-        float p_256013_,
-        boolean p_256228_,
-        ExplosionInteraction p_255784_,
-        boolean p_256377_)
+        public void explode(@javax.annotation.Nullable Entity entity,
+        @javax.annotation.Nullable DamageSource damageSource,
+        @javax.annotation.Nullable ExplosionDamageCalculator calculator,
+        double x,
+        double y,
+        double z,
+        float radius,
+        boolean fire,
+        ExplosionInteraction interaction,
+        ParticleOptions smallParticles,
+        ParticleOptions largeParticles,
+        WeightedList<ExplosionParticleInfo> particleInfo,
+        Holder<SoundEvent> sound)
     {
         throw new UnsupportedOperationException("Structurize fake immutable level - no explosions possible!");
     }
@@ -573,22 +630,15 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public int getFreeMapId()
-    {
-        // Noop
-        return 0;
-    }
-
-    @Override
     @javax.annotation.Nullable
-    public MapItemSavedData getMapData(String p_46650_)
+    public MapItemSavedData getMapData(net.minecraft.world.level.saveddata.maps.MapId id)
     {
         // Noop
         return null;
     }
 
     @Override
-    public void playSeededSound(@javax.annotation.Nullable Player p_220372_,
+    public void playSeededSound(@javax.annotation.Nullable Entity source,
         Entity p_220373_,
         Holder<SoundEvent> p_263500_,
         SoundSource p_220375_,
@@ -600,7 +650,7 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public void playSeededSound(@javax.annotation.Nullable Player p_262953_,
+    public void playSeededSound(@javax.annotation.Nullable Entity source,
         double p_263004_,
         double p_263398_,
         double p_263376_,
@@ -620,13 +670,7 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public void setMapData(String p_151533_, MapItemSavedData p_151534_)
-    {
-        // Noop
-    }
-
-    @Override
-    public void gameEvent(GameEvent p_220404_, Vec3 p_220405_, Context p_220406_)
+    public void gameEvent(Holder<GameEvent> event, Vec3 position, Context context)
     {
         // Noop
     }
@@ -646,7 +690,7 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public void levelEvent(@javax.annotation.Nullable Player p_46771_, int p_46772_, BlockPos p_46773_, int p_46774_)
+    public void levelEvent(@javax.annotation.Nullable Entity source, int eventId, BlockPos position, int data)
     {
         // Noop
     }
@@ -698,19 +742,19 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public boolean mayInteract(Player p_46557_, BlockPos p_46558_)
+    public boolean mayInteract(Entity entity, BlockPos position)
     {
         // Noop
         return false;
     }
 
     @Override
-    public void neighborShapeChanged(Direction p_220385_,
-        BlockState p_220386_,
-        BlockPos p_220387_,
-        BlockPos p_220388_,
-        int p_220389_,
-        int p_220390_)
+    public void neighborShapeChanged(Direction direction,
+        BlockPos position,
+        BlockPos neighborPosition,
+        BlockState neighborState,
+        int updateFlags,
+        int updateLimit)
     {
         // Noop
     }
@@ -735,7 +779,7 @@ public class FakeLevel extends Level
     }
 
     @Override
-    public void setSpawnSettings(boolean p_46704_, boolean p_46705_)
+    public void setSpawnSettings(boolean spawnEnemies)
     {
         // Noop
     }
@@ -761,7 +805,7 @@ public class FakeLevel extends Level
     }
 
     @Override
-    protected void tickBlockEntities()
+    public void tickBlockEntities()
     {
         // Noop
     }
@@ -774,25 +818,6 @@ public class FakeLevel extends Level
 
     @Override
     public void updateSkyBrightness()
-    {
-        // Noop
-    }
-
-    @Override
-    public <T> @NotNull LazyOptional<T> getCapability(@NotNull Capability<T> cap, @Nullable Direction side)
-    {
-        // Noop
-        return LazyOptional.empty();
-    }
-
-    @Override
-    public void invalidateCaps()
-    {
-        // Noop
-    }
-
-    @Override
-    public void reviveCaps()
     {
         // Noop
     }

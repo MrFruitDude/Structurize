@@ -3,6 +3,7 @@ package com.ldtteam.structurize.blueprints.v1;
 import com.ldtteam.structurize.api.util.BlockPosUtil;
 import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.blockentities.interfaces.IBlueprintDataProviderBE;
+import com.ldtteam.structurize.util.EntityNbtHelper;
 import com.ldtteam.structurize.tag.ModTags;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.state.BlockState;
@@ -14,14 +15,13 @@ import net.minecraft.nbt.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.SharedConstants;
 import net.minecraft.util.datafix.fixes.References;
-import net.minecraft.util.datafix.fixes.ChunkPalettedStorageFix;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.neoforged.fml.ModList;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.logging.log4j.LogManager;
 
@@ -80,7 +80,7 @@ public class BlueprintUtil
             {
                 continue;
             }
-            String modName = ForgeRegistries.BLOCKS.getKey(state.getBlock()).getNamespace();
+            String modName = BuiltInRegistries.BLOCK.getKey(state.getBlock()).getNamespace();
 
             short x = (short) (mutablePos.getX() - pos.getX()), y = (short) (mutablePos.getY() - pos.getY()),
               z = (short) (mutablePos.getZ() - pos.getZ());
@@ -102,7 +102,7 @@ public class BlueprintUtil
             final BlockEntity te = chunk.getBlockEntities().containsKey(mutablePos) && !chunk.getBlockEntities().get(mutablePos).isRemoved() ? chunk.getBlockEntity(mutablePos) : world.getBlockEntity(mutablePos.immutable());
             if (te != null)
             {
-                CompoundTag teTag = te.saveWithFullMetadata();
+                CompoundTag teTag = te.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
                 teTag.putShort("x", x);
                 teTag.putShort("y", y);
                 teTag.putShort("z", z);
@@ -134,7 +134,7 @@ public class BlueprintUtil
             }
 
             final Vec3 oldPos = entity.position();
-            final CompoundTag entityTag = entity.serializeNBT();
+            final CompoundTag entityTag = EntityNbtHelper.save(entity, world.registryAccess());
 
             final ListTag posList = new ListTag();
             posList.add(DoubleTag.valueOf(oldPos.x - pos.getX()));
@@ -183,7 +183,7 @@ public class BlueprintUtil
             BlockPosUtil.writeToNBT(blueprintData, TAG_CORNER_ONE, corner1);
             BlockPosUtil.writeToNBT(blueprintData, TAG_CORNER_TWO, corner2);
 
-            if (!world.isClientSide)
+            if (!world.isClientSide())
             {
                 ((ServerLevel) world).getChunkSource().blockChanged(pos);
             }
@@ -269,7 +269,7 @@ public class BlueprintUtil
             tag.put("architects", architectsTag);
         }
 
-        tag.put("mcversion", IntTag.valueOf(SharedConstants.getCurrentVersion().getDataVersion().getVersion()));
+        tag.put("mcversion", IntTag.valueOf(SharedConstants.getCurrentVersion().dataVersion().version()));
 
         final CompoundTag optionalTag = new CompoundTag();
         final CompoundTag structurizeTag = new CompoundTag();
@@ -289,7 +289,7 @@ public class BlueprintUtil
 
         for (short i = 0; i < paletteSize; i++)
         {
-            final CompoundTag nbt = paletteTag.getCompound(i);
+            final CompoundTag nbt = paletteTag.getCompoundOrEmpty(i);
             try
             {
                 final CompoundTag fixedNbt = DataFixerUtils.runDataFixer(nbt, References.BLOCK_STATE, oldDataVersion);
@@ -303,7 +303,7 @@ public class BlueprintUtil
                         break;
                 }
 
-                final BlockState state = NbtUtils.readBlockState(BuiltInRegistries.BLOCK.asLookup(), fixedNbt);
+                final BlockState state = NbtUtils.readBlockState(BuiltInRegistries.BLOCK, fixedNbt);
                 palette.add(i, state);
             }
             catch (final Exception e)
@@ -318,8 +318,8 @@ public class BlueprintUtil
 
     private static void fixPalette1343(final CompoundTag oldBlockState)
     {
-        final String name = oldBlockState.getString("Name");
-        oldBlockState.putString("Name", oldBlockState.getString("Name").toLowerCase(Locale.US));
+        final String name = oldBlockState.getStringOr("Name", "");
+        oldBlockState.putString("Name", oldBlockState.getStringOr("Name", "").toLowerCase(Locale.US));
         if (name.contains(MOD_ID))
         {
             if (name.contains("blockshingle_"))
@@ -353,7 +353,7 @@ public class BlueprintUtil
             else if (name.contains("blockpaperwall") && !name.contains("_"))
             {
                 oldBlockState.putString("Name",
-                  "structurize:" + oldBlockState.getCompound("Properties").getString("variant") + "_blockpaperwall");
+                  "structurize:" + oldBlockState.getCompoundOrEmpty("Properties").getStringOr("variant", "") + "_blockpaperwall");
             }
         }
     }
@@ -364,16 +364,16 @@ public class BlueprintUtil
 
         for (short i = 0; i < tileEntities.length; i++)
         {
-            final CompoundTag nbt = tileEntitiesTag.getCompound(i);
+            final CompoundTag nbt = tileEntitiesTag.getCompoundOrEmpty(i);
 
             try
             {
-                final String id = nbt.getString("id");
+                final String id = nbt.getStringOr("id", "");
 
                 if (id.contains("minecolonies"))
                 {
                     nbt.putString("id", id.toLowerCase(Locale.US));
-                    nbt.putString("Item", nbt.getString("Item".toLowerCase(Locale.US)));
+                    nbt.putString("Item", nbt.getStringOr("Item", "").toLowerCase(Locale.US));
                     tileEntities[i] = nbt;
                     continue;
                 }
@@ -404,11 +404,11 @@ public class BlueprintUtil
 
         for (short i = 0; i < entities.length; i++)
         {
-            final CompoundTag nbt = entitiesTag.getCompound(i);
+            final CompoundTag nbt = entitiesTag.getCompoundOrEmpty(i);
 
             try
             {
-                final String id = nbt.getString("id");
+                final String id = nbt.getStringOr("id", "");
 
                 entities[i] = id.startsWith("minecraft:") ? DataFixerUtils.runDataFixer(nbt, References.ENTITY, oldDataVersion) : nbt;
             }
@@ -452,7 +452,7 @@ public class BlueprintUtil
             final CompoundTag compound = tileEntities[i];
             if (compound != null)
             {
-                final BlockPos bp = new BlockPos(compound.getInt("x"), compound.getInt("y"), compound.getInt("z"));
+                final BlockPos bp = new BlockPos(compound.getIntOr("x", 0), compound.getIntOr("y", 0), compound.getIntOr("z", 0));
                 if (blockPosToFind.contains(bp))
                 {
                     result.put(i, bp);
@@ -479,7 +479,7 @@ public class BlueprintUtil
             final CompoundTag teCompound = tileEntities[e.getKey()];
             tileEntities[e.getKey()] = null;
             final CompoundTag newBScompound = dataFixer.apply(teCompound);
-            final BlockState newBlockState = NbtUtils.readBlockState(BuiltInRegistries.BLOCK.asLookup(), newBScompound);
+            final BlockState newBlockState = NbtUtils.readBlockState(BuiltInRegistries.BLOCK, newBScompound);
             final short newBlockId = paletteFull ? newBlocksToBlockId.getOrDefault(newBlockState, (short) palette.size()) : paletteIndex;
             if (newBlockId == palette.size())
             {
@@ -509,19 +509,19 @@ public class BlueprintUtil
             if (bs.getBlock() == Blocks.POTTED_CACTUS) // flower pot fix
             {
                 teToBlockStateFix(palette, blocks, tileEntities, i, teCompound -> {
-                    final String type = teCompound.getString("Item") + teCompound.getInt("Data");
-                    return (CompoundTag) ChunkPalettedStorageFix.FLOWER_POT_MAP
-                                           .getOrDefault(type, ChunkPalettedStorageFix.FLOWER_POT_MAP.get("minecraft:air0"))
+                    final String type = teCompound.getStringOr("Item", "") + teCompound.getIntOr("Data", 0);
+                    return (CompoundTag) DataFixerUtils.FLOWER_POT_MAP
+                                           .getOrDefault(type, DataFixerUtils.FLOWER_POT_MAP.get("minecraft:air0"))
                                            .getValue();
                 });
             }
             else if (bs.getBlock() == Blocks.NOTE_BLOCK) // note block fix
             {
                 teToBlockStateFix(palette, blocks, tileEntities, i, teCompound -> {
-                    final String type = Boolean.toString(teCompound.getBoolean("powered"))
-                                          + (byte) Math.min(Math.max(teCompound.getInt("note"), 0), 24);
-                    return (CompoundTag) ChunkPalettedStorageFix.NOTE_BLOCK_MAP
-                                           .getOrDefault(type, ChunkPalettedStorageFix.NOTE_BLOCK_MAP.get("false0"))
+                    final String type = Boolean.toString(teCompound.getBooleanOr("powered", false))
+                                          + (byte) Math.min(Math.max(teCompound.getIntOr("note", 0), 0), 24);
+                    return (CompoundTag) DataFixerUtils.NOTE_BLOCK_MAP
+                                           .getOrDefault(type, DataFixerUtils.NOTE_BLOCK_MAP.get("false0"))
                                            .getValue();
                 });
             }
@@ -537,10 +537,10 @@ public class BlueprintUtil
     public static Blueprint readBlueprintFromNBT(final CompoundTag nbtTag)
     {
         final CompoundTag tag = nbtTag;
-        byte version = tag.getByte("version");
+        byte version = tag.getByteOr("version", (byte) 0);
         if (version == 1)
         {
-            short sizeX = tag.getShort("size_x"), sizeY = tag.getShort("size_y"), sizeZ = tag.getShort("size_z");
+            short sizeX = tag.getShortOr("size_x", (short) 0), sizeY = tag.getShortOr("size_y", (short) 0), sizeZ = tag.getShortOr("size_z", (short) 0);
 
             // Reading required Mods
             List<String> requiredMods = new ArrayList<>();
@@ -549,7 +549,7 @@ public class BlueprintUtil
             short modListSize = (short) modsList.size();
             for (int i = 0; i < modListSize; i++)
             {
-                requiredMods.add((modsList.get(i)).getAsString());
+                requiredMods.add(modsList.getStringOr(i, ""));
                 if (!requiredMods.get(i).equals("minecraft") && !ModList.get().getModContainerById(requiredMods.get(i)).isPresent())
                 {
                     LogManager.getLogger().warn("Found missing mods for Blueprint, some blocks may be missing: " + requiredMods.get(i));
@@ -557,14 +557,14 @@ public class BlueprintUtil
                 }
             }
 
-            final int oldDataVersion = tag.contains("mcversion") ? tag.getInt("mcversion") : DEFAULT_FIXER_IF_NOT_FOUND;
+            final int oldDataVersion = tag.contains("mcversion") ? tag.getIntOr("mcversion", 0) : DEFAULT_FIXER_IF_NOT_FOUND;
 
             // Reading Pallete
             ListTag paletteTag = (ListTag) tag.get("palette");
             List<BlockState> palette = fixPalette(oldDataVersion, paletteTag);
 
             // Reading Blocks
-            short[][][] blocks = convertSaveDataToBlocks(tag.getIntArray("blocks"), sizeX, sizeY, sizeZ);
+            short[][][] blocks = convertSaveDataToBlocks(tag.getIntArray("blocks").orElse(new int[0]), sizeX, sizeY, sizeZ);
 
             // Reading Tile Entities
             CompoundTag[] tileEntities = fixTileEntities(oldDataVersion, (ListTag) tag.get("tile_entities"));
@@ -582,27 +582,27 @@ public class BlueprintUtil
 
             schem.setEntities(entities);
 
-            if (tag.getAllKeys().contains("name"))
+            if (tag.keySet().contains("name"))
             {
-                schem.setName(tag.getString("name"));
+                schem.setName(tag.getStringOr("name", ""));
             }
-            if (tag.getAllKeys().contains("architects"))
+            if (tag.keySet().contains("architects"))
             {
                 ListTag architectsTag = (ListTag) tag.get("architects");
                 String[] architects = new String[architectsTag.size()];
                 for (int i = 0; i < architectsTag.size(); i++)
                 {
-                    architects[i] = architectsTag.getString(i);
+                    architects[i] = architectsTag.getString(i).orElse("");
                 }
                 schem.setArchitects(architects);
             }
 
-            if (tag.getAllKeys().contains(NBT_OPTIONAL_DATA_TAG))
+            if (tag.keySet().contains(NBT_OPTIONAL_DATA_TAG))
             {
-                final CompoundTag optionalTag = tag.getCompound(NBT_OPTIONAL_DATA_TAG);
-                if (optionalTag.getAllKeys().contains(MOD_ID))
+                final CompoundTag optionalTag = tag.getCompoundOrEmpty(NBT_OPTIONAL_DATA_TAG);
+                if (optionalTag.keySet().contains(MOD_ID))
                 {
-                    final CompoundTag structurizeTag = optionalTag.getCompound(MOD_ID);
+                    final CompoundTag structurizeTag = optionalTag.getCompoundOrEmpty(MOD_ID);
                     BlockPos offsetPos = BlockPosUtil.readFromNBT(structurizeTag, "primary_offset");
                     schem.setCachePrimaryOffset(offsetPos);
                 }

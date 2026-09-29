@@ -228,5 +228,11 @@
   "com.ldtteam.tag.tooltip.invisible": "Hide Blueprint in Buildtool like Integrated Buildings or Mineshafts",
   "com.ldtteam.structurize.gui.switchpack.authors": "Authors: %s",
   "com.ldtteam.structurize.gui.switchpack.list.empty": "There are no structure packs found, please install some",
-  "com.ldtteam.structurize.gui.switchpack.pack_disabled.hover_text": "This pack is disabled because it only exists on the client. In order to use this pack, the server must enable the config option '%s' on the server."
+  "com.ldtteam.structurize.gui.switchpack.pack_disabled.hover_text": "This pack is disabled because it only exists on the client. In order to use this pack, the server must enable the config option '%s' on the server.",
+  "item.structurize.blockbarreldeco_onside": "Barrel Horizontal",
+  "item.structurize.blockbarreldeco_standing": "Barrel Vertical",
+  "item.structurize.blockfluidsubstitution": "Fluid Placeholder",
+  "item.structurize.blocksolidsubstitution": "Solid Placeholder",
+  "item.structurize.blocksubstitution": "Placeholder Block",
+  "item.structurize.blocktagsubstitution": "Tag Anchor Block"
 }

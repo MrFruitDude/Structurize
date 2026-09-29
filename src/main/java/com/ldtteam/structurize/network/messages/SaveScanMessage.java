@@ -5,10 +5,11 @@ import com.ldtteam.structurize.storage.ClientStructurePackLoader;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -32,9 +33,9 @@ public class SaveScanMessage implements IMessage
         final FriendlyByteBuf buffer = new FriendlyByteBuf(buf);
         try (ByteBufInputStream stream = new ByteBufInputStream(buffer))
         {
-            final CompoundTag wrapperCompound = NbtIo.readCompressed(stream);
-            this.compoundNBT = wrapperCompound.getCompound(TAG_SCHEMATIC);
-            this.fileName = wrapperCompound.getString(TAG_MILLIS);
+            final CompoundTag wrapperCompound = NbtIo.readCompressed(stream, NbtAccounter.unlimitedHeap());
+            this.compoundNBT = wrapperCompound.getCompoundOrEmpty(TAG_SCHEMATIC);
+            this.fileName = wrapperCompound.getStringOr(TAG_MILLIS, "");
         }
         catch (final RuntimeException e)
         {
@@ -84,7 +85,7 @@ public class SaveScanMessage implements IMessage
     }
 
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         if (compoundNBT != null)
         {

@@ -1,7 +1,7 @@
 {
   "parent": "builtin/generated",
   "textures": {
-    "layer0": "structurize:item/caliper.png"
+    "layer0": "structurize:item/caliper"
   },
   "display": {
     "thirdperson": {

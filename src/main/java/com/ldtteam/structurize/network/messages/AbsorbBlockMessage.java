@@ -1,12 +1,13 @@
 package com.ldtteam.structurize.network.messages;
 
 import com.ldtteam.structurize.items.ItemTagSubstitution;
+import com.ldtteam.structurize.util.ItemStackNbtHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -36,7 +37,7 @@ public class AbsorbBlockMessage implements IMessage
     public AbsorbBlockMessage(@NotNull final FriendlyByteBuf buf)
     {
         this.pos = buf.readBlockPos();
-        this.stack = buf.readItem();
+        this.stack = ItemStackNbtHelper.readNetworkStack(buf);
     }
 
     /**
@@ -47,7 +48,7 @@ public class AbsorbBlockMessage implements IMessage
     public void toBytes(@NotNull final FriendlyByteBuf buf)
     {
         buf.writeBlockPos(this.pos);
-        buf.writeItemStack(this.stack, false);
+        ItemStackNbtHelper.writeNetworkStack(buf, this.stack);
     }
 
     @Nullable
@@ -58,10 +59,10 @@ public class AbsorbBlockMessage implements IMessage
     }
 
     @Override
-    public void onExecute(@NotNull final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(@NotNull final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         final ServerPlayer player = ctxIn.getSender();
-        final ItemStack current = player.getInventory().getSelected();
+        final ItemStack current = player.getInventory().getSelectedItem();
 
         if (current.getItem() instanceof ItemTagSubstitution anchor)
         {

@@ -18,6 +18,9 @@ import java.util.function.Predicate;
  */
 public class FakeLevelChunkSection extends LevelChunkSection
 {
+    private static final int SECTION_WIDTH = 16;
+    private static final int SECTION_HEIGHT = 16;
+
     private final FakeChunk fakeChunk;
     private final int yIdx;
 
@@ -38,7 +41,7 @@ public class FakeLevelChunkSection extends LevelChunkSection
 
     private BlockPos formGlobalPos(int x, int y, int z)
     {
-        return new BlockPos(x + fakeChunk.getPos().x * SECTION_WIDTH, y + yIdx * SECTION_HEIGHT, z  + fakeChunk.getPos().z * SECTION_WIDTH);
+        return new BlockPos(x + fakeChunk.getPos().x() * SECTION_WIDTH, y + yIdx * SECTION_HEIGHT, z  + fakeChunk.getPos().z() * SECTION_WIDTH);
     }
 
     @Override
@@ -63,7 +66,7 @@ public class FakeLevelChunkSection extends LevelChunkSection
     @Override
     public Holder<Biome> getNoiseBiome(int x, int y, int z)
     {
-        return fakeChunk.getNoiseBiome(fakeChunk.getPos().x, yIdx * SECTION_HEIGHT, fakeChunk.getPos().z);
+        return fakeChunk.getNoiseBiome(fakeChunk.getPos().x(), yIdx * SECTION_HEIGHT, fakeChunk.getPos().z());
     }
 
     @Override

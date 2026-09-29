@@ -1,10 +1,10 @@
 package com.ldtteam.structurize.client.fakelevel;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.lighting.LightEngine;
-import net.minecraftforge.common.ForgeConfigSpec.IntValue;
+import net.neoforged.neoforge.common.ModConfigSpec.IntValue;
 
 /**
  * Loosely based on {@link BlockAndTintGetter}

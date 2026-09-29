@@ -1,10 +1,10 @@
 package com.ldtteam.structurize.util;
 
 import com.ldtteam.structurize.client.rendertask.tasks.BoxPreviewData;
+import com.ldtteam.structurize.api.util.BlockPosUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -56,7 +56,9 @@ public class ScanToolData
     public int getCurrentSlotId()
     {
         // the default slot is #1 so that we can treat slot 0 as if it were slot 10 (but we still call it slot 0)
-        return this.tag.contains(NBT_CURRENT) ?  Math.max(0, Math.min(NUM_SLOTS - 1, this.tag.getInt(NBT_CURRENT))) : 1;
+        return this.tag.contains(NBT_CURRENT)
+            ? Math.max(0, Math.min(NUM_SLOTS - 1, this.tag.getIntOr(NBT_CURRENT, 1)))
+            : 1;
     }
 
     /**
@@ -67,8 +69,9 @@ public class ScanToolData
     public Slot getCurrentSlotData()
     {
         final int current = getCurrentSlotId();
-        final ListTag slots = tag.getList(NBT_SLOTS, Tag.TAG_COMPOUND);
-        return new Slot(Objects.requireNonNullElse(current < slots.size() ? slots.getCompound(current) : null,new CompoundTag()));
+        final ListTag slots = tag.getListOrEmpty(NBT_SLOTS);
+        final CompoundTag slotTag = current < slots.size() ? slots.getCompound(current).orElse(null) : null;
+        return new Slot(Objects.requireNonNullElse(slotTag, new CompoundTag()));
     }
 
     /**
@@ -78,7 +81,7 @@ public class ScanToolData
     public void setCurrentSlotData(@Nullable final Slot data)
     {
         final int current = getCurrentSlotId();
-        final ListTag slots = tag.getList(NBT_SLOTS, Tag.TAG_COMPOUND);
+        final ListTag slots = tag.getListOrEmpty(NBT_SLOTS);
         while (current >= slots.size()) slots.add(new CompoundTag());
         slots.set(current, data == null ? new CompoundTag() : data.write(new CompoundTag()));
         tag.put(NBT_SLOTS, slots);
@@ -136,14 +139,14 @@ public class ScanToolData
          */
         public Slot(@NotNull final CompoundTag tag)
         {
-            final BlockPos corner1 = NbtUtils.readBlockPos(tag.getCompound("c1"));
-            final BlockPos corner2 = NbtUtils.readBlockPos(tag.getCompound("c2"));
+            final BlockPos corner1 = BlockPosUtil.readFromNBT(tag, "c1");
+            final BlockPos corner2 = BlockPosUtil.readFromNBT(tag, "c2");
             final Optional<BlockPos> anchor = tag.contains("a")
-                    ? Optional.of(NbtUtils.readBlockPos(tag.getCompound("a")))
+                    ? Optional.of(BlockPosUtil.readFromNBT(tag, "a"))
                     : Optional.empty();
             this.box = new BoxPreviewData(corner1, corner2, anchor);
 
-            this.name = tag.getString("n");
+            this.name = tag.getStringOr("n", "");
         }
 
         /**
@@ -153,11 +156,11 @@ public class ScanToolData
          */
         public CompoundTag write(@NotNull final CompoundTag tag)
         {
-            tag.put("c1", NbtUtils.writeBlockPos(this.box.getPos1()));
-            tag.put("c2", NbtUtils.writeBlockPos(this.box.getPos2()));
+            BlockPosUtil.writeToNBT(tag, "c1", this.box.getPos1());
+            BlockPosUtil.writeToNBT(tag, "c2", this.box.getPos2());
             if (this.box.getAnchor().isPresent())
             {
-                tag.put("a", NbtUtils.writeBlockPos(this.box.getAnchor().get()));
+                BlockPosUtil.writeToNBT(tag, "a", this.box.getAnchor().get());
             }
             else
             {

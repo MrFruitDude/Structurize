@@ -23,6 +23,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
@@ -305,9 +306,9 @@ public class WindowShapeTool extends AbstractBlueprintManipulationWindow
         }
 
         @Override
-        public String getLabel(final int index)
+        public MutableComponent getLabel(final int index)
         {
-            return sections.get(index);
+            return Component.literal(sections.get(index));
         }
     }
 
@@ -352,10 +353,10 @@ public class WindowShapeTool extends AbstractBlueprintManipulationWindow
                         Rotation.NONE,
                         Mirror.NONE))));
 
-            if (type == BuildToolPlacementMessage.HandlerType.Survival)
-            {
-                clearAndClose();
-            }
+            // The generated shape is consumed by every placement mode. Clear
+            // its preview after the request so Complete/Pretty cannot leave a
+            // stale ghost in the world.
+            clearAndClose();
         }
     }
 

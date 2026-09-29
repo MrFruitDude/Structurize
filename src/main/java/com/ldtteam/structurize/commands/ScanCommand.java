@@ -4,7 +4,7 @@ import com.ldtteam.structurize.api.util.BlockPosUtil;
 import com.ldtteam.structurize.client.rendertask.tasks.BoxPreviewData;
 import com.ldtteam.structurize.items.ItemScanTool;
 import com.ldtteam.structurize.util.ScanToolData;
-import com.mojang.authlib.GameProfile;
+import net.minecraft.server.players.NameAndId;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -75,7 +75,7 @@ public class ScanCommand extends AbstractCommand
      */
     public static final String ANCHOR_POS = "anchor_pos";
 
-    private static int execute(final CommandSourceStack source, final BlockPos from, final BlockPos to, final Optional<BlockPos> anchorPos, final GameProfile profile, final String name) throws CommandSyntaxException
+    private static int execute(final CommandSourceStack source, final BlockPos from, final BlockPos to, final Optional<BlockPos> anchorPos, final NameAndId profile, final String name) throws CommandSyntaxException
     {
         @Nullable final Level world = source.getLevel();
         if (source.getEntity() instanceof Player && !source.getPlayerOrException().isCreative())
@@ -87,10 +87,10 @@ public class ScanCommand extends AbstractCommand
         final Player player;
         if (profile != null && world.getServer() != null)
         {
-            player = world.getServer().getPlayerList().getPlayer(profile.getId());
+            player = world.getServer().getPlayerList().getPlayer(profile.id());
             if (player == null)
             {
-                source.sendFailure(Component.translatable(PLAYER_NOT_FOUND, profile.getName()));
+                source.sendFailure(Component.translatable(PLAYER_NOT_FOUND, profile.name()));
                 return 0;
             }
         } 
@@ -128,7 +128,7 @@ public class ScanCommand extends AbstractCommand
     {
         final BlockPos from = BlockPosArgument.getSpawnablePos(context, POS1);
         final BlockPos to = BlockPosArgument.getSpawnablePos(context, POS2);
-        GameProfile profile = GameProfileArgument.getGameProfiles(context, PLAYER_NAME).stream().findFirst().orElse(null);
+        NameAndId profile = GameProfileArgument.getGameProfiles(context, PLAYER_NAME).stream().findFirst().orElse(null);
         return execute(context.getSource(), from, to, Optional.empty(), profile, null);
     }
 
@@ -136,7 +136,7 @@ public class ScanCommand extends AbstractCommand
     {
         final BlockPos from = BlockPosArgument.getSpawnablePos(context, POS1);
         final BlockPos to = BlockPosArgument.getSpawnablePos(context, POS2);
-        GameProfile profile = GameProfileArgument.getGameProfiles(context, PLAYER_NAME).stream().findFirst().orElse(null);
+        NameAndId profile = GameProfileArgument.getGameProfiles(context, PLAYER_NAME).stream().findFirst().orElse(null);
         String name = StringArgumentType.getString(context, FILE_NAME);
         return execute(context.getSource(), from, to, Optional.empty(), profile, name);
     }
@@ -146,7 +146,7 @@ public class ScanCommand extends AbstractCommand
         final BlockPos from = BlockPosArgument.getSpawnablePos(context, POS1);
         final BlockPos to = BlockPosArgument.getSpawnablePos(context, POS2);
         final BlockPos anchorPos = BlockPosArgument.getSpawnablePos(context, ANCHOR_POS);
-        GameProfile profile = GameProfileArgument.getGameProfiles(context, PLAYER_NAME).stream().findFirst().orElse(null);
+        NameAndId profile = GameProfileArgument.getGameProfiles(context, PLAYER_NAME).stream().findFirst().orElse(null);
         String name = StringArgumentType.getString(context, FILE_NAME);
         return execute(context.getSource(), from, to, Optional.of(anchorPos), profile, name);
     }

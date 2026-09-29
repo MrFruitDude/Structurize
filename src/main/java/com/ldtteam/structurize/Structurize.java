@@ -22,14 +22,12 @@ import com.ldtteam.structurize.storage.ClientStructurePackLoader;
 import com.ldtteam.structurize.storage.ServerStructurePackLoader;
 import com.ldtteam.structurize.storage.rendering.ServerPreviewDistributor;
 import net.minecraft.util.datafix.DataFixers;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.javafmlmod.FMLModContainer;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -42,7 +40,7 @@ public class Structurize
     /**
      * The proxy.
      */
-    public static final IProxy proxy = DistExecutor.safeRunForDist(() -> ClientProxy::new, () -> ServerProxy::new);
+    public static final IProxy proxy = createProxy();
 
     /**
      * The config instance.
@@ -52,35 +50,35 @@ public class Structurize
     /**
      * Mod init, registers events to their respective busses
      */
-    public Structurize()
+    public Structurize(final FMLModContainer modContainer, final Dist dist)
     {
-        config = new Configuration(ModLoadingContext.get().getActiveContainer());
+        config = new Configuration(modContainer, modContainer.getEventBus());
 
-        ModBlocks.getRegistry().register(FMLJavaModLoadingContext.get().getModEventBus());
-        ModItems.getRegistry().register(FMLJavaModLoadingContext.get().getModEventBus());
-        ModBlockEntities.getRegistry().register(FMLJavaModLoadingContext.get().getModEventBus());
-        ModItemGroups.TAB_REG.register(FMLJavaModLoadingContext.get().getModEventBus());
+        final IEventBus modBus = modContainer.getEventBus();
+        final IEventBus gameBus = NeoForge.EVENT_BUS;
+        ModBlocks.getRegistry().register(modBus);
+        ModItems.getRegistry().register(modBus);
+        ModBlockEntities.getRegistry().register(modBus);
+        ModItemGroups.TAB_REG.register(modBus);
 
-        Mod.EventBusSubscriber.Bus.MOD.bus().get().register(LifecycleSubscriber.class);
-        Mod.EventBusSubscriber.Bus.FORGE.bus().get().register(EventSubscriber.class);
+        modBus.register(LifecycleSubscriber.class);
+        gameBus.register(EventSubscriber.class);
 
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-            ClientStructurePackLoader.onClientLoading();
-            Mod.EventBusSubscriber.Bus.FORGE.bus().get().register(ClientStructurePackLoader.class);
-            Mod.EventBusSubscriber.Bus.FORGE.bus().get().register(ClientFutureProcessor.class);
-            Mod.EventBusSubscriber.Bus.MOD.bus().get().register(ClientLifecycleSubscriber.class);
-            Mod.EventBusSubscriber.Bus.FORGE.bus().get().register(ClientEventSubscriber.class);
-        });
+        if (dist.isClient())
+        {
+            gameBus.register(ClientStructurePackLoader.class);
+            gameBus.register(ClientFutureProcessor.class);
+            modBus.register(ClientLifecycleSubscriber.class);
+            gameBus.register(ClientEventSubscriber.class);
+        }
+        else
+        {
+            ServerStructurePackLoader.onServerStarting();
+        }
 
-        DistExecutor.unsafeRunWhenOn(Dist.DEDICATED_SERVER,  () -> ServerStructurePackLoader::onServerStarting);
-
-        Mod.EventBusSubscriber.Bus.FORGE.bus().get().register(ServerStructurePackLoader.class);
-        Mod.EventBusSubscriber.Bus.FORGE.bus().get().register(ServerPreviewDistributor.class);
-        Mod.EventBusSubscriber.Bus.FORGE.bus().get().register(ServerFutureProcessor.class);
-
-
-        Mod.EventBusSubscriber.Bus.MOD.bus().get().register(this.getClass());
-        Mod.EventBusSubscriber.Bus.MOD.bus().get().register(ModItemGroups.class);
+        gameBus.register(ServerStructurePackLoader.class);
+        gameBus.register(ServerPreviewDistributor.class);
+        gameBus.register(ServerFutureProcessor.class);
 
         if (DataFixerUtils.isVanillaDF)
         {
@@ -88,7 +86,7 @@ public class Structurize
             {
                 throw new RuntimeException("You are trying to run old mod on much newer vanilla. Missing some newest data versions. Please update com/ldtteam/structures/blueprints/v1/DataVersion");
             }
-            else if (!FMLEnvironment.production && DataVersion.CURRENT == DataVersion.UPCOMING)
+            else if (!FMLEnvironment.isProduction() && DataVersion.CURRENT == DataVersion.UPCOMING)
             {
                 throw new RuntimeException("Missing some newest data versions. Please update com/ldtteam/structures/blueprints/v1/DataVersion");
             }
@@ -102,17 +100,10 @@ public class Structurize
         }
     }
 
-    /**
-     * Event handler for forge pre init event.
-     *
-     * @param event the forge pre init event.
-     */
-    @SubscribeEvent
-    public static void preInit(@NotNull final FMLCommonSetupEvent event)
+    private static IProxy createProxy()
     {
-        Network.getNetwork().registerCommonMessages();
+        return FMLEnvironment.getDist().isClient() ? new ClientProxy() : new ServerProxy();
     }
-
 
     /**
      * Get the config handler.

@@ -9,7 +9,7 @@ import com.ldtteam.blockui.views.View;
 import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.client.gui.util.InputFilters;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.apache.commons.lang3.StringUtils;
@@ -107,7 +107,7 @@ public class WindowSelectRes extends AbstractWindowSkeleton
         final List<ItemStack> allItems,
         final BiConsumer<ItemStack, Integer> resultAction)
     {
-        this(new ResourceLocation(MOD_ID, "gui/windowselectres.xml"), origin, description, previousItem, allItems, resultAction, false, null);
+        this(Identifier.fromNamespaceAndPath(MOD_ID, "gui/windowselectres.xml"), origin, description, previousItem, allItems, resultAction, false, null);
     }
 
     public WindowSelectRes(
@@ -119,11 +119,11 @@ public class WindowSelectRes extends AbstractWindowSkeleton
         final boolean secondaryConfirm,
         @Nullable Component selectCountText)
     {
-        this(new ResourceLocation(MOD_ID, "gui/windowselectres.xml"), origin, description, previousItem, allItems, resultAction, secondaryConfirm, selectCountText);
+        this(Identifier.fromNamespaceAndPath(MOD_ID, "gui/windowselectres.xml"), origin, description, previousItem, allItems, resultAction, secondaryConfirm, selectCountText);
     }
 
     public WindowSelectRes(
-        final ResourceLocation xml,
+        final Identifier xml,
         @Nullable final BOWindow origin,
         final Component description,
         @Nullable final ItemStack previousItem,
@@ -316,7 +316,7 @@ public class WindowSelectRes extends AbstractWindowSkeleton
         for (final ItemStack stack : allItems)
         {
             if ((this.filter.isEmpty()
-                || stack.getDescriptionId().toLowerCase(Locale.US).contains(this.filter.toLowerCase(Locale.US))
+                || stack.getItem().getDescriptionId().toLowerCase(Locale.US).contains(this.filter.toLowerCase(Locale.US))
                 || stack.getHoverName().getString().toLowerCase(Locale.US).contains(filter.toLowerCase(Locale.US))))
             {
                 this.displayedItems.add(stack);

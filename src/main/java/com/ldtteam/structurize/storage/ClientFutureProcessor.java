@@ -1,8 +1,8 @@
 package com.ldtteam.structurize.storage;
 
 import com.ldtteam.structurize.blueprints.v1.Blueprint;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.bus.api.SubscribeEvent;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.LinkedList;
@@ -45,34 +45,31 @@ public class ClientFutureProcessor
     }
 
     @SubscribeEvent
-    public static void onWorldTick(final TickEvent.ClientTickEvent event)
+    public static void onWorldTick(final ClientTickEvent.Post event)
     {
-        if (event.phase == TickEvent.Phase.END)
+        if (!blueprintConsumerQueue.isEmpty() && blueprintConsumerQueue.peek().blueprintFuture.isDone())
         {
-            if (!blueprintConsumerQueue.isEmpty() && blueprintConsumerQueue.peek().blueprintFuture.isDone())
+            final BlueprintProcessingData data = blueprintConsumerQueue.poll();
+            try
             {
-                final BlueprintProcessingData data = blueprintConsumerQueue.poll();
-                try
-                {
-                    data.consumer.accept(data.blueprintFuture.get());
-                }
-                catch (InterruptedException | ExecutionException e)
-                {
-                    e.printStackTrace();
-                }
+                data.consumer.accept(data.blueprintFuture.get());
             }
-
-            if (!blueprintDataConsumerQueue.isEmpty() && blueprintDataConsumerQueue.peek().blueprintDataFuture.isDone())
+            catch (InterruptedException | ExecutionException e)
             {
-                final BlueprintDataProcessingData data = blueprintDataConsumerQueue.poll();
-                try
-                {
-                    data.consumer.accept(data.blueprintDataFuture.get());
-                }
-                catch (InterruptedException | ExecutionException e)
-                {
-                    e.printStackTrace();
-                }
+                e.printStackTrace();
+            }
+        }
+
+        if (!blueprintDataConsumerQueue.isEmpty() && blueprintDataConsumerQueue.peek().blueprintDataFuture.isDone())
+        {
+            final BlueprintDataProcessingData data = blueprintDataConsumerQueue.poll();
+            try
+            {
+                data.consumer.accept(data.blueprintDataFuture.get());
+            }
+            catch (InterruptedException | ExecutionException e)
+            {
+                e.printStackTrace();
             }
         }
     }

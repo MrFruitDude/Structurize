@@ -17,11 +17,11 @@ import io.netty.buffer.ByteBufInputStream;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.forgespi.language.IModInfo;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModList;
+import net.neoforged.neoforgespi.language.IModInfo;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -64,7 +64,13 @@ public class ClientStructurePackLoader
         final List<String> modList = new ArrayList<>();
         for (IModInfo mod : ModList.get().getMods())
         {
-            modPaths.add(mod.getOwningFile().getFile().findResource(BLUEPRINT_FOLDER, mod.getModId()));
+            // findFile only resolves regular files. Built-in structure packs
+            // are directories, so resolve them from the content roots instead.
+            modPaths.add(mod.getOwningFile().getFile().getContents().getContentRoots().stream()
+                .map(root -> root.resolve(BLUEPRINT_FOLDER).resolve(mod.getModId()))
+                .filter(Files::isDirectory)
+                .findFirst()
+                .orElse(null));
             modList.add(mod.getModId());
         }
 
@@ -79,13 +85,19 @@ public class ClientStructurePackLoader
         IOPool.execute(() ->
         {
             // This loads from the jar
-            for (final Path modPath : modPaths)
+            for (int index = 0; index < modPaths.size(); index++)
             {
+                final Path modPath = modPaths.get(index);
+                if (modPath == null || !Files.isDirectory(modPath))
+                {
+                    continue;
+                }
+                final String owner = modList.get(index);
                 try
                 {
                     try (final Stream<Path> paths = Files.list(modPath))
                     {
-                        paths.forEach(element -> StructurePacks.discoverPackAtPath(element, true, modList, false, modPath.toString().split("/")[1]));
+                        paths.forEach(element -> StructurePacks.discoverPackAtPath(element, true, modList, false, owner));
                     }
                 }
                 catch (IOException e)
@@ -141,31 +153,28 @@ public class ClientStructurePackLoader
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void onWorldTick(final TickEvent.ClientTickEvent event)
+    public static void onWorldTick(final ClientTickEvent.Pre event)
     {
-        if (event.phase == TickEvent.Phase.START)
+        if (Minecraft.getInstance().level != null && loadingState == ClientLoadingState.FINISHED_LOADING)
         {
-            if (Minecraft.getInstance().level != null && loadingState == ClientLoadingState.FINISHED_LOADING)
+            if (Minecraft.getInstance().getSingleplayerServer() != null)
             {
-                if (Minecraft.getInstance().isSingleplayer())
-                {
-                    loadingState = ClientLoadingState.FINISHED_SYNCING;
-                    StructurePacks.setFinishedLoading();
-                    StructurePacks.ensureSelectedPack();
-                    return;
-                }
+                loadingState = ClientLoadingState.FINISHED_SYNCING;
+                StructurePacks.setFinishedLoading();
+                StructurePacks.ensureSelectedPack();
+                return;
+            }
 
-                loadingState = ClientLoadingState.SYNCING;
-                Network.getNetwork().sendToServer(new NotifyServerAboutStructurePacksMessage(StructurePacks.getPackMetas()));
-            }
-            else if (Minecraft.getInstance().level == null && (loadingState == ClientLoadingState.SYNCING || loadingState == ClientLoadingState.FINISHED_SYNCING))
-            {
-                Log.getLogger().warn("Client logged off. Resetting Pack Meta and Reloading State");
-                loadingState = ClientLoadingState.LOADING;
-                StructurePacks.clearPacks();
-                RenderingCache.clear();
-                onClientLoading();
-            }
+            loadingState = ClientLoadingState.SYNCING;
+            Network.getNetwork().sendToServer(new NotifyServerAboutStructurePacksMessage(StructurePacks.getPackMetas()));
+        }
+        else if (Minecraft.getInstance().level == null && (loadingState == ClientLoadingState.SYNCING || loadingState == ClientLoadingState.FINISHED_SYNCING))
+        {
+            Log.getLogger().warn("Client logged off. Resetting Pack Meta and Reloading State");
+            loadingState = ClientLoadingState.LOADING;
+            StructurePacks.clearPacks();
+            RenderingCache.clear();
+            onClientLoading();
         }
     }
 
@@ -187,7 +196,7 @@ public class ClientStructurePackLoader
             return;
         }
         
-        if (serverStructurePacks.containsKey(Minecraft.getInstance().player.getGameProfile().getName()))
+        if (serverStructurePacks.containsKey(Minecraft.getInstance().player.getGameProfile().name()))
         {
             Minecraft.getInstance().player.sendSystemMessage(Component.translatable("structurize.pack.equaluser.error"));
         }
@@ -358,6 +367,6 @@ public class ClientStructurePackLoader
             .resolve(packName.toLowerCase(Locale.US))
             .resolve(SCANS_FOLDER).resolve(fileName)));
         RenderingCache.getOrCreateBlueprintPreviewData("blueprint").setPos(null);
-        Minecraft.getInstance().player.displayClientMessage(Component.translatable("Scan successfully saved as %s", fileName), false);
+        Minecraft.getInstance().player.sendSystemMessage(Component.translatable("Scan successfully saved as %s", fileName));
     }
 }

@@ -15,8 +15,8 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.concurrent.ExecutionException;
@@ -448,8 +448,6 @@ public class BlueprintPreviewData
 
     /**
      * Set the solid placeholder blockstate override, only updates when the renderer is recalculated
-     *
-     * @return
      */
     public void setSolidSubstitutionOverride(final BlockState solidSubstitutionOverride)
     {

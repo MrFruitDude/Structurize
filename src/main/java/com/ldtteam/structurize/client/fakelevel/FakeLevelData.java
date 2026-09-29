@@ -1,77 +1,54 @@
 package com.ldtteam.structurize.client.fakelevel;
 
+import java.util.function.Supplier;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.Difficulty;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.world.level.storage.WritableLevelData;
-import java.util.function.Supplier;
 
 /**
- * Porting: class is relatively small, just check super class manually (all of missing methods are/were just aliases)
+ * Minimal writable level data for client-only schematic preview levels.
  */
 public class FakeLevelData implements WritableLevelData
 {
-    protected Supplier<LevelData> vanillaLevelData;
+    protected Supplier<ClientLevel> vanillaLevel;
     protected final IFakeLevelLightProvider lightProvider;
 
-    protected FakeLevelData(final Supplier<LevelData> vanillaLevelData, final IFakeLevelLightProvider lightProvider)
+    protected FakeLevelData(final Supplier<ClientLevel> vanillaLevel, final IFakeLevelLightProvider lightProvider)
     {
-        this.vanillaLevelData = vanillaLevelData;
+        this.vanillaLevel = vanillaLevel;
         this.lightProvider = lightProvider;
     }
 
     @Override
-    public int getXSpawn()
+    public LevelData.RespawnData getRespawnData()
     {
-        return 0;
+        return this.vanillaLevel.get().getLevelData().getRespawnData();
     }
 
     @Override
-    public int getYSpawn()
+    public void setSpawn(final LevelData.RespawnData respawnData)
     {
-        return 0;
-    }
-
-    @Override
-    public int getZSpawn()
-    {
-        return 0;
-    }
-
-    @Override
-    public float getSpawnAngle()
-    {
-        return 0;
+        // Spawn state is irrelevant to an in-memory preview level.
     }
 
     @Override
     public long getGameTime()
     {
-        return vanillaLevelData.get().getGameTime();
+        return this.vanillaLevel.get().getGameTime();
     }
 
-    @Override
     public long getDayTime()
     {
-        return lightProvider.forceOwnLightLevel() ? lightProvider.getDayTime() : vanillaLevelData.get().getDayTime();
+        return this.lightProvider.forceOwnLightLevel()
+            ? this.lightProvider.getDayTime()
+            : this.vanillaLevel.get().getOverworldClockTime();
     }
 
-    @Override
-    public boolean isThundering()
+    public GameRules getGameRules()
     {
-        return false;
-    }
-
-    @Override
-    public boolean isRaining()
-    {
-        return false;
-    }
-
-    @Override
-    public void setRaining(final boolean p_78171_)
-    {
-        // Noop
+        return new GameRules(this.vanillaLevel.get().enabledFeatures());
     }
 
     @Override
@@ -81,15 +58,9 @@ public class FakeLevelData implements WritableLevelData
     }
 
     @Override
-    public GameRules getGameRules()
-    {
-        return vanillaLevelData.get().getGameRules();
-    }
-
-    @Override
     public Difficulty getDifficulty()
     {
-        // would like peaceful but dont want to trigger entity remove in case someone actually manage to tick fake level
+        // Keep entities alive if a preview is accidentally ticked.
         return Difficulty.EASY;
     }
 
@@ -97,29 +68,5 @@ public class FakeLevelData implements WritableLevelData
     public boolean isDifficultyLocked()
     {
         return true;
-    }
-
-    @Override
-    public void setXSpawn(final int p_78651_)
-    {
-        // Noop
-    }
-
-    @Override
-    public void setYSpawn(final int p_78652_)
-    {
-        // Noop
-    }
-
-    @Override
-    public void setZSpawn(final int p_78653_)
-    {
-        // Noop
-    }
-
-    @Override
-    public void setSpawnAngle(final float p_78648_)
-    {
-        // Noop
     }
 }

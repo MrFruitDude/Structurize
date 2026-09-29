@@ -27,6 +27,31 @@ public interface IFakeLevelBlockGetter extends BlockGetter
     short getSizeZ();
 
     /**
+     * @return height for Y axis
+     */
+    short getSizeY();
+
+    @Override
+    default int getMinY()
+    {
+        return 0;
+    }
+
+    @Override
+    default int getHeight()
+    {
+        return getSizeY();
+    }
+
+    /**
+     * @return max Y coord exclusive
+     */
+    default int getMaxYExclusive()
+    {
+        return getMinY() + getHeight();
+    }
+
+    /**
      * @return min X coord inclusive
      * @see    #getMinBuildHeight() equivalent
      */
@@ -35,7 +60,6 @@ public interface IFakeLevelBlockGetter extends BlockGetter
         return 0;
     }
 
-    @Override
     default int getMinBuildHeight()
     {
         return 0;
@@ -52,7 +76,7 @@ public interface IFakeLevelBlockGetter extends BlockGetter
 
     /**
      * @return max X coord exclusive
-     * @see    #getMaxBuildHeight() equivalent
+     * @see    #getMaxYExclusive() equivalent
      */
     default int getMaxX()
     {
@@ -60,8 +84,17 @@ public interface IFakeLevelBlockGetter extends BlockGetter
     }
 
     /**
+     * @return max Y coord exclusive
+     * @see    #getMaxYExclusive() equivalent
+     */
+    default int getMaxY()
+    {
+        return getMaxYExclusive();
+    }
+
+    /**
      * @return max Z coord exclusive
-     * @see    #getMaxBuildHeight() equivalent
+     * @see    #getMaxYExclusive() equivalent
      */
     default int getMaxZ()
     {
@@ -76,7 +109,7 @@ public interface IFakeLevelBlockGetter extends BlockGetter
     default boolean isPosInside(final BlockPos pos)
     {
         return getMinX() <= pos.getX() && pos.getX() < getMaxX() &&
-            getMinBuildHeight() <= pos.getY() && pos.getY() < getMaxBuildHeight() &&
+            getMinBuildHeight() <= pos.getY() && pos.getY() < getMaxYExclusive() &&
             getMinZ() <= pos.getZ() && pos.getZ() < getMaxZ();
     }
 
@@ -124,6 +157,6 @@ public interface IFakeLevelBlockGetter extends BlockGetter
      */
     default AABB getAABB()
     {
-        return new AABB(getMinX(), getMinBuildHeight(), getMinZ(), getMaxX(), getMaxBuildHeight(), getMaxZ());
+        return new AABB(getMinX(), getMinBuildHeight(), getMinZ(), getMaxX(), getMaxYExclusive(), getMaxZ());
     }
 }

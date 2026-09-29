@@ -1,48 +1,39 @@
 package com.ldtteam.structurize.management;
 
-import net.minecraft.nbt.CompoundTag;
+import com.mojang.serialization.Codec;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.level.saveddata.SavedDataType;
 
-import static com.ldtteam.structurize.api.util.constant.Constants.MOD_ID;
-import static com.ldtteam.structurize.api.util.constant.NbtTagConstants.TAG_UUID;
+import java.util.UUID;
 
 /**
- * The UUID storage class.
+ * Server-scoped identifier used to keep operation history stable across restarts.
  */
-public class UUIDStorage extends SavedData
+public final class UUIDStorage extends SavedData
 {
-    /**
-     * The data description.
-     */
-    public static final String DATA_NAME = MOD_ID + "_UUID";
+    public static final Codec<UUIDStorage> CODEC = UUIDUtil.CODEC.xmap(UUIDStorage::new, UUIDStorage::getUUID);
+    public static final SavedDataType<UUIDStorage> TYPE = new SavedDataType<>(
+        Identifier.fromNamespaceAndPath("structurize", "server_uuid"),
+        level -> new UUIDStorage(),
+        level -> CODEC
+    );
 
-    /**
-     * Required constructor.
-     */
+    private final UUID uuid;
+
     public UUIDStorage()
     {
+        this(UUID.randomUUID());
     }
 
-    public UUIDStorage(CompoundTag s)
+    public UUIDStorage(final UUID uuid)
     {
-        load(s);
+        this.uuid = uuid;
     }
 
-    public void load(final CompoundTag compound)
+    public UUID getUUID()
     {
-        if (compound.hasUUID(TAG_UUID))
-        {
-            Manager.setServerUUID(compound.getUUID(TAG_UUID));
-        }
-    }
-
-        @Override
-    public CompoundTag save(final CompoundTag compound)
-    {
-        if (Manager.getServerUUID() != null)
-        {
-            compound.putUUID(TAG_UUID, Manager.getServerUUID());
-        }
-        return compound;
+        return uuid;
     }
 }

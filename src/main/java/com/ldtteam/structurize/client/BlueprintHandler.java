@@ -6,9 +6,9 @@ import com.google.common.cache.LoadingCache;
 import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.storage.rendering.types.BlueprintPreviewData;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.profiling.Profiler;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -70,32 +70,26 @@ public final class BlueprintHandler
      * @param pos         position to render at
      * @param ctx         rendering event
      */
-    public void draw(final BlueprintPreviewData previewData, final BlockPos pos, final RenderLevelStageEvent ctx)
+    public void draw(final BlueprintPreviewData previewData, final BlockPos pos, final SubmitCustomGeometryEvent ctx)
     {
-        final Vec3 viewPosition = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        ctx.getPoseStack().pushPose();
-        ctx.getPoseStack().translate(viewPosition.x(), viewPosition.y(), viewPosition.z());
-
         internalBackportDraw(previewData, pos, ctx);
-        
-        ctx.getPoseStack().popPose();
     }
 
     /**
      * DO NOT USE IN MCOL
      */
-    public void internalBackportDraw(final BlueprintPreviewData previewData, final BlockPos pos, final RenderLevelStageEvent ctx)
+    public void internalBackportDraw(final BlueprintPreviewData previewData, final BlockPos pos, final SubmitCustomGeometryEvent ctx)
     {
         if (previewData == null || previewData.getBlueprint() == null)
         {
             Log.getLogger().warn("Trying to draw null blueprint!");
             return;
         }
-        Minecraft.getInstance().getProfiler().push("struct_render_cache");
+        Profiler.get().push("struct_render_cache");
         
         rendererCache.getUnchecked(previewData.getRenderKey()).draw(previewData, pos, ctx);
 
-        Minecraft.getInstance().getProfiler().pop();
+        Profiler.get().pop();
     }
 
     /**
@@ -123,26 +117,22 @@ public final class BlueprintHandler
      */
     public void drawAtListOfPositions(final BlueprintPreviewData previewData,
         final List<BlockPos> points,
-        final RenderLevelStageEvent ctx)
+        final SubmitCustomGeometryEvent ctx)
     {
         if (points.isEmpty() || previewData == null || previewData.getBlueprint() == null)
         {
             return;
         }
 
-        Minecraft.getInstance().getProfiler().push("struct_render_multi");
+        Profiler.get().push("struct_render_multi");
 
         final BlueprintRenderer renderer = rendererCache.getUnchecked(previewData.getRenderKey());
 
-        final Vec3 viewPosition = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        ctx.getPoseStack().pushPose();
-        ctx.getPoseStack().translate(viewPosition.x(), viewPosition.y(), viewPosition.z());
         for (final BlockPos coord : points)
         {
             renderer.draw(previewData, coord, ctx);
         }
-        ctx.getPoseStack().popPose();
 
-        Minecraft.getInstance().getProfiler().pop();
+        Profiler.get().pop();
     }
 }

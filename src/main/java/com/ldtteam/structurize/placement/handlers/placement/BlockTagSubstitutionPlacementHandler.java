@@ -7,8 +7,10 @@ import com.ldtteam.structurize.blocks.ModBlocks;
 import com.ldtteam.structurize.placement.IPlacementContext;
 import com.ldtteam.structurize.util.BlockUtils;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.util.Tuple;
+import com.ldtteam.structurize.api.util.Tuple;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -45,7 +47,7 @@ public class BlockTagSubstitutionPlacementHandler implements IPlacementHandler
     {
         if (placementContext.fancyPlacement())
         {
-            if (tileEntityData != null && BlockEntity.loadStatic(pos, blockState, tileEntityData) instanceof BlockEntityTagSubstitution tagEntity)
+            if (tileEntityData != null && BlockEntity.loadStatic(pos, blockState, tileEntityData, world.registryAccess()) instanceof BlockEntityTagSubstitution tagEntity)
             {
                 final IPlacementHandler placementHandler = PlacementHandlers.getHandler(world, pos, tagEntity.getReplacement().getBlockState());
                 if (placementHandler != this)
@@ -97,7 +99,11 @@ public class BlockTagSubstitutionPlacementHandler implements IPlacementHandler
     {
         if (placementContext.fancyPlacement())
         {
-            if (blockEntityData != null && BlockEntity.loadStatic(BlockPos.ZERO, blueprintState, blockEntityData.getB()) instanceof BlockEntityTagSubstitution tagEntity)
+            if (blockEntityData != null && BlockEntity.loadStatic(
+                BlockPos.ZERO,
+                blueprintState,
+                blockEntityData.getB(),
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)) instanceof BlockEntityTagSubstitution tagEntity)
             {
                 try
                 {
@@ -146,7 +152,7 @@ public class BlockTagSubstitutionPlacementHandler implements IPlacementHandler
     {
         if (placementContext.fancyPlacement())
         {
-            if (tileEntityData != null && BlockEntity.loadStatic(pos, blockState, tileEntityData) instanceof BlockEntityTagSubstitution tagEntity)
+            if (tileEntityData != null && BlockEntity.loadStatic(pos, blockState, tileEntityData, world.registryAccess()) instanceof BlockEntityTagSubstitution tagEntity)
             {
                 final IPlacementHandler placementHandler = PlacementHandlers.getHandler(world, pos, tagEntity.getReplacement().getBlockState());
                 if (placementHandler != this)

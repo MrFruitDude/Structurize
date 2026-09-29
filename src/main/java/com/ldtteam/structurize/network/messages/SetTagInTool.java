@@ -1,12 +1,13 @@
 package com.ldtteam.structurize.network.messages;
 
 import com.ldtteam.structurize.items.ItemTagTool;
+import com.ldtteam.structurize.util.ItemStackNbtHelper;
 import com.ldtteam.structurize.items.ModItems;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -54,7 +55,7 @@ public class SetTagInTool implements IMessage
     }
 
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         if (ctxIn.getSender() == null)
         {
@@ -63,14 +64,14 @@ public class SetTagInTool implements IMessage
 
         if (!ctxIn.getSender().isCreative())
         {
-            ctxIn.getSender().displayClientMessage(Component.translatable("structurize.gui.tagtool.creative_only"), false);
+            ctxIn.getSender().sendSystemMessage(Component.translatable("structurize.gui.tagtool.creative_only"));
             return;
         }
 
         final ItemStack stack = ctxIn.getSender().getInventory().getItem(slot);
         if (stack.getItem() == ModItems.tagTool.get())
         {
-            stack.getOrCreateTag().putString(ItemTagTool.TAG_CURRENT_TAG, tag);
+            ItemStackNbtHelper.getOrCreateCustomTag(stack).putString(ItemTagTool.TAG_CURRENT_TAG, tag);
         }
     }
 }

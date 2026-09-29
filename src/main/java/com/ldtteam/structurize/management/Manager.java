@@ -20,8 +20,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.DimensionDataStorage;
-import net.minecraftforge.server.ServerLifecycleHooks;
+import net.minecraft.world.level.storage.SavedDataStorage;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.util.*;
 
@@ -542,7 +542,7 @@ public final class Manager
         final List<ChangeStorage> list = changeQueue.get(player.getUUID());
         if (list == null || list.isEmpty())
         {
-            player.displayClientMessage(Component.translatable("structurize.gui.undoredo.undo.notfound"), false);
+            player.sendSystemMessage(Component.translatable("structurize.gui.undoredo.undo.notfound"));
             return;
         }
 
@@ -553,11 +553,11 @@ public final class Manager
             {
                 if (!storage.isDone())
                 {
-                    player.displayClientMessage(Component.translatable("structurize.gui.undoredo.undo.inprogress", storage.getOperation()), false);
+                    player.sendSystemMessage(Component.translatable("structurize.gui.undoredo.undo.inprogress", storage.getOperation()));
                     return;
                 }
 
-                player.displayClientMessage(Component.translatable("structurize.gui.undoredo.undo.add", storage.getOperation()), false);
+                player.sendSystemMessage(Component.translatable("structurize.gui.undoredo.undo.add", storage.getOperation()));
                 addToQueue(new UndoOperation(player, storage));
                 if (storage.getOperation().toString().indexOf(UNDO_PREFIX) == 0)
                 {
@@ -567,7 +567,7 @@ public final class Manager
             }
         }
 
-        player.displayClientMessage(Component.translatable("structurize.gui.undoredo.undo.notfound"), false);
+        player.sendSystemMessage(Component.translatable("structurize.gui.undoredo.undo.notfound"));
     }
 
     /**
@@ -581,7 +581,7 @@ public final class Manager
         final List<ChangeStorage> list = changeQueue.get(player.getUUID());
         if (list == null || list.isEmpty())
         {
-            player.displayClientMessage(Component.translatable("structurize.gui.undoredo.redo.notfound"), false);
+            player.sendSystemMessage(Component.translatable("structurize.gui.undoredo.redo.notfound"));
             return;
         }
 
@@ -591,17 +591,17 @@ public final class Manager
             {
                 if (!storage.isDone())
                 {
-                    player.displayClientMessage(Component.translatable("structurize.gui.undoredo.redo.inprogress", storage.getOperation()), false);
+                    player.sendSystemMessage(Component.translatable("structurize.gui.undoredo.redo.inprogress", storage.getOperation()));
                     return;
                 }
 
-                player.displayClientMessage(Component.translatable("structurize.gui.undoredo.redo.add", storage.getOperation()), false);
+                player.sendSystemMessage(Component.translatable("structurize.gui.undoredo.redo.add", storage.getOperation()));
                 addToQueue(new RedoOperation(player, storage));
                 return;
             }
         }
 
-        player.displayClientMessage(Component.translatable("structurize.gui.undoredo.redo.notfound"), false);
+        player.sendSystemMessage(Component.translatable("structurize.gui.undoredo.redo.notfound"));
     }
 
     /**
@@ -625,14 +625,18 @@ public final class Manager
      */
     private static UUID generateOrRetrieveUUID()
     {
-        final DimensionDataStorage storage = ServerLifecycleHooks.getCurrentServer().overworld().getDataStorage();
-        final UUIDStorage instance = storage.computeIfAbsent(UUIDStorage::new, UUIDStorage::new, UUIDStorage.DATA_NAME);
-        if (serverUUID == null)
+        final SavedDataStorage storage = ServerLifecycleHooks.getCurrentServer().overworld().getDataStorage();
+        final UUIDStorage loaded = storage.computeIfAbsent(UUIDStorage.TYPE);
+        if (loaded.getUUID() != null)
         {
-            Manager.setServerUUID(UUID.randomUUID());
-            Log.getLogger().info(String.format("New Server UUID %s", serverUUID));
+            Manager.setServerUUID(loaded.getUUID());
+            return serverUUID;
         }
-        storage.set(UUIDStorage.DATA_NAME, instance);
+
+        final UUIDStorage created = new UUIDStorage(UUID.randomUUID());
+        storage.set(UUIDStorage.TYPE, created);
+        Manager.setServerUUID(created.getUUID());
+        Log.getLogger().info(String.format("New Server UUID %s", serverUUID));
 
         return serverUUID;
     }

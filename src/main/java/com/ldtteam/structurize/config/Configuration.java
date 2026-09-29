@@ -1,13 +1,18 @@
 package com.ldtteam.structurize.config;
 
 import com.ldtteam.structurize.config.AbstractConfiguration.ConfigWatcher;
-import net.minecraftforge.common.ForgeConfigSpec;
-import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
-import net.minecraftforge.common.ForgeConfigSpec.ValueSpec;
-import net.minecraftforge.fml.ModContainer;
-import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.config.ConfigTracker;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.config.ModConfigEvent;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.common.ModConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec.ConfigValue;
+import net.neoforged.neoforge.common.ModConfigSpec.ValueSpec;
 import org.apache.commons.lang3.tuple.Pair;
+
+import java.util.function.Function;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -35,21 +40,22 @@ public class Configuration
     /**
      * Builds configuration tree.
      *
-     * @param modContainer from event
+     * @param modContainer mod container
+     * @param modBus       mod lifecycle event bus
      */
-    public Configuration(final ModContainer modContainer)
+    public Configuration(final ModContainer modContainer, final IEventBus modBus)
     {
-        final Pair<ServerConfiguration, ForgeConfigSpec> ser = new ForgeConfigSpec.Builder().configure(ServerConfiguration::new);
-        server = new ModConfig(ModConfig.Type.SERVER, ser.getRight(), modContainer);
+        final Pair<ServerConfiguration, ModConfig> ser =
+            register(ServerConfiguration::new, ModConfig.Type.SERVER, modContainer);
+        server = ser.getRight();
         serverConfig = ser.getLeft();
-        modContainer.addConfig(server);
 
-        if (FMLEnvironment.dist.isClient())
+        if (FMLEnvironment.getDist().isClient())
         {
-            final Pair<ClientConfiguration, ForgeConfigSpec> cli = new ForgeConfigSpec.Builder().configure(ClientConfiguration::new);
-            client = new ModConfig(ModConfig.Type.CLIENT, cli.getRight(), modContainer);
+            final Pair<ClientConfiguration, ModConfig> cli =
+                register(ClientConfiguration::new, ModConfig.Type.CLIENT, modContainer);
+            client = cli.getRight();
             clientConfig = cli.getLeft();
-            modContainer.addConfig(client);
 
             activeModConfigs = new ModConfig[] {client, server};
             activeConfigs = new AbstractConfiguration[] {clientConfig, serverConfig};
@@ -62,6 +68,23 @@ public class Configuration
             activeModConfigs = new ModConfig[] {server};
             activeConfigs = new AbstractConfiguration[] {serverConfig};
         }
+
+        modBus.addListener(ModConfigEvent.Loading.class, event -> onConfigLoad(event.getConfig()));
+        modBus.addListener(ModConfigEvent.Reloading.class, event -> onConfigReload(event.getConfig()));
+    }
+
+    private <T extends AbstractConfiguration> Pair<T, ModConfig> register(
+        final Function<ModConfigSpec.Builder, T> factory,
+        final ModConfig.Type type,
+        final ModContainer modContainer)
+    {
+        if (type == ModConfig.Type.CLIENT && !FMLEnvironment.getDist().isClient())
+        {
+            throw new IllegalStateException("Client configuration cannot be created on the dedicated server");
+        }
+
+        final Pair<T, ModConfigSpec> built = new ModConfigSpec.Builder().configure(factory);
+        return Pair.of(built.getLeft(), ConfigTracker.INSTANCE.registerConfig(type, built.getRight(), modContainer));
     }
 
     public ClientConfiguration getClient()
@@ -77,13 +100,13 @@ public class Configuration
     /**
      * cache starting values for watchers
      */
-    public void onConfigLoad(final ModConfig modConfig)
+    private void onConfigLoad(final ModConfig modConfig)
     {
         if (client != null && modConfig.getSpec() == client.getSpec())
         {
             clientConfig.watchers.forEach(ConfigWatcher::cacheLastValue);
         }
-        else if (modConfig.getSpec() == server.getSpec())
+        else if (server != null && modConfig.getSpec() == server.getSpec())
         {
             serverConfig.watchers.forEach(ConfigWatcher::cacheLastValue);
         }
@@ -92,13 +115,13 @@ public class Configuration
     /**
      * iterate watchers and fire changes if needed
      */
-    public void onConfigReload(final ModConfig modConfig)
+    private void onConfigReload(final ModConfig modConfig)
     {
         if (client != null && modConfig.getSpec() == client.getSpec())
         {
             clientConfig.watchers.forEach(ConfigWatcher::compareAndFireChangeEvent);
         }
-        else if (modConfig.getSpec() == server.getSpec())
+        else if (server != null && modConfig.getSpec() == server.getSpec())
         {
             serverConfig.watchers.forEach(ConfigWatcher::compareAndFireChangeEvent);
         }
@@ -112,6 +135,7 @@ public class Configuration
     public <T> void set(final ConfigValue<T> configValue, final T value)
     {
         configValue.set(value);
+        configValue.save();
         onConfigValueEdit(configValue);
     }
 
@@ -127,7 +151,7 @@ public class Configuration
         {
             for (final ConfigWatcher<?> configWatcher : cfg.watchers)
             {
-                if (configWatcher.sameForgeConfig(configValue))
+                if (configWatcher.isSameForgeConfig(configValue))
                 {
                     configWatcher.compareAndFireChangeEvent();
                 }
@@ -143,21 +167,6 @@ public class Configuration
      */
     public Optional<ValueSpec> getSpecFromValue(final ConfigValue<?> value)
     {
-        return valueSpecCache.computeIfAbsent(value, key -> {
-            for (final ModConfig cfg : activeModConfigs)
-            {
-                if (cfg.getSpec().get(value.getPath()) instanceof final ValueSpec valueSpec)
-                {
-                    return Optional.of(valueSpec);
-                }
-            }
-
-            if (!FMLEnvironment.production)
-            {
-                throw new RuntimeException("Cannot find backing ValueSpec for: " + value.getPath());
-            }
-
-            return Optional.empty();
-        });
+        return Optional.of(value.getSpec());
     }
 }

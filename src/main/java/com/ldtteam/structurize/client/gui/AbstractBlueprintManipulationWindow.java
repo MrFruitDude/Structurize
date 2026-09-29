@@ -23,16 +23,17 @@ import com.ldtteam.structurize.storage.rendering.types.BlueprintPreviewData;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.Tuple;
+import net.minecraft.resources.Identifier;
+import com.ldtteam.structurize.api.util.Tuple;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
-import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
-import net.minecraftforge.common.ForgeConfigSpec.DoubleValue;
-import net.minecraftforge.common.ForgeConfigSpec.ValueSpec;
+import net.neoforged.neoforge.common.ModConfigSpec.ConfigValue;
+import net.neoforged.neoforge.common.ModConfigSpec.DoubleValue;
+import net.neoforged.neoforge.common.ModConfigSpec.ValueSpec;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -133,7 +134,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
         if (RenderingCache.getOrCreateBlueprintPreviewData(bluePrintId).getPos() == null)
         {
             Utils.playErrorSound(Minecraft.getInstance().player);
-            Minecraft.getInstance().player.displayClientMessage(Component.translatable("structurize.gui.missing.pos"), false);
+            Minecraft.getInstance().player.sendSystemMessage(Component.translatable("structurize.gui.missing.pos"));
             cancelClicked();
         }
     }
@@ -159,7 +160,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
                     Utils.playErrorSound(Minecraft.getInstance().player);
                     if (SurvivalBlueprintHandlers.getHandlers().isEmpty())
                     {
-                        Minecraft.getInstance().player.displayClientMessage(Component.translatable("structurize.gui.no.survival.handler"), false);
+                        Minecraft.getInstance().player.sendSystemMessage(Component.translatable("structurize.gui.no.survival.handler"));
                     }
                     return;
                 }
@@ -249,7 +250,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
             {
                 final ButtonImage buttonImage = rowPane.findPaneOfTypeByID("type", ButtonImage.class);
                 buttonImage.setText(categories.get(index).getA());
-                buttonImage.setTextColor(ChatFormatting.BLACK.getColor());
+                buttonImage.setTextColor(0xFF000000);
                 buttonImage.setHandler(button -> categories.get(index).getB().run());
             }
         });
@@ -266,11 +267,11 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
     }
 
     @Override
-    public boolean onUnhandledKeyTyped(final int ch, final int key)
+    public boolean onUnhandledKeyTyped(final KeyEvent event)
     {
-        if (ch != 0 || getFocus() != null) return super.onUnhandledKeyTyped(ch, key);
+        if (getFocus() != null) return super.onUnhandledKeyTyped(event);
 
-        final InputConstants.Key inputKey = InputConstants.Type.KEYSYM.getOrCreate(key);
+        final InputConstants.Key inputKey = InputConstants.Type.KEYSYM.getOrCreate(event.key());
 
         if (ModKeyMappings.MOVE_FORWARD.get().isActiveAndMatches(inputKey))
         {
@@ -314,7 +315,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
         }
         else
         {
-            return super.onUnhandledKeyTyped(ch, key);
+            return super.onUnhandledKeyTyped(event);
         }
         return true;
     }
@@ -429,10 +430,9 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
                             getWindow().addChild(confirmDialog);
                             View.setFocus(null);
 
-                            final ImageRepeatable background = new ImageRepeatable();
+                            final Image background = new Image();
                             background.setSize(177, 150);
-                            background.setImageLoc(new ResourceLocation(MOD_ID, "textures/gui/builderhut/builder_papper.png"));
-                            background.setImageSize(6, 7, 177, 231, 20, 20, 100, 100);
+                            background.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/builderhut/builder_papper.png"), false);
                             confirmDialog.addChild(background);
 
                             final Text text = new Text();
@@ -446,7 +446,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
                             final ButtonImage confirm = new ButtonImage();
                             confirm.setPosition(10, 123);
                             confirm.setSize(64, 17);
-                            confirm.setImage(new ResourceLocation(MOD_ID, "textures/gui/builderhut/builder_button_small.png"), false);
+                            confirm.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/builderhut/builder_button_small.png"));
                             confirm.setColors(Color.getByName("black"));
                             confirm.setTextAlignment(Alignment.MIDDLE);
                             confirm.setTextRenderBox(64, 17);
@@ -466,7 +466,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
                             final ButtonImage cancel = new ButtonImage();
                             cancel.setPosition(103, 123);
                             cancel.setSize(64, 17);
-                            cancel.setImage(new ResourceLocation(MOD_ID, "textures/gui/builderhut/builder_button_small.png"), false);
+                            cancel.setImage(Identifier.fromNamespaceAndPath(MOD_ID, "textures/gui/builderhut/builder_button_small.png"));
                             cancel.setColors(Color.getByName("black"));
                             cancel.setTextAlignment(Alignment.MIDDLE);
                             cancel.setTextRenderBox(64, 17);
@@ -594,7 +594,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
      */
     protected void updateRotationState()
     {
-        findPaneOfTypeByID(BUTTON_MIRROR, ButtonImage.class).setImage(new ResourceLocation(MOD_ID, String.format(RES_STRING, BUTTON_MIRROR + (RenderingCache.getOrCreateBlueprintPreviewData(bluePrintId).getRotationMirror().mirror().equals(Mirror.NONE) ? "" : GREEN_POS))), false);
+        findPaneOfTypeByID(BUTTON_MIRROR, ButtonImage.class).setImage(Identifier.fromNamespaceAndPath(MOD_ID, String.format(RES_STRING, BUTTON_MIRROR + (RenderingCache.getOrCreateBlueprintPreviewData(bluePrintId).getRotationMirror().mirror().equals(Mirror.NONE) ? "" : GREEN_POS))));
 
         final String rotation = switch (RenderingCache.getOrCreateBlueprintPreviewData(bluePrintId).getRotationMirror().rotation())
         {
@@ -603,7 +603,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
             case COUNTERCLOCKWISE_90 -> "left_green";
             case NONE -> "up_green";
         };
-        findPaneOfTypeByID(IMAGE_ROTATION, Image.class).setImage(new ResourceLocation(MOD_ID, String.format(RES_STRING, rotation)), false);
+        findPaneOfTypeByID(IMAGE_ROTATION, Image.class).setImage(Identifier.fromNamespaceAndPath(MOD_ID, String.format(RES_STRING, rotation)), false);
     }
 
     /**

@@ -15,6 +15,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnRequest;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.decoration.HangingEntity;
@@ -31,7 +33,6 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -247,21 +248,23 @@ public class StructurePlacer
                 {
                     final BlockPos pos = this.handler.getCenterPos().subtract(handler.getBluePrint().getPrimaryBlockOffset());
 
-                    final Optional<EntityType<?>> type = EntityType.by(compound);
-                    if (type.isPresent())
-                    {
-                        final Entity entity = type.get().create(world);
-                        if (entity != null)
-                        {
-                            entity.deserializeNBT(compound);
+                    final Entity entity = EntityType.loadEntityRecursive(
+                        compound,
+                        world,
+                        new EntitySpawnRequest(EntitySpawnReason.STRUCTURE, false),
+                        loaded -> loaded);
 
+                    if (entity != null)
+                    {
                             entity.setUUID(UUID.randomUUID());
                             Vec3 posInWorld = entity.position().add(pos.getX(), pos.getY(), pos.getZ());
                             if (entity instanceof HangingEntity hang)
                             {
                                 posInWorld = posInWorld.subtract(Vec3.atLowerCornerOf(hang.blockPosition().subtract(hang.getPos())));
                             }
-                            entity.moveTo(posInWorld.x, posInWorld.y, posInWorld.z, entity.getYRot(), entity.getXRot());
+                            entity.setPos(posInWorld.x, posInWorld.y, posInWorld.z);
+                            entity.setYRot(entity.getYRot());
+                            entity.setXRot(entity.getXRot());
 
                             final List<? extends Entity> list = world.getEntitiesOfClass(entity.getClass(), new AABB(posInWorld.add(1,1,1), posInWorld.add(-1,-1,-1)));
                             boolean foundEntity = false;
@@ -307,7 +310,6 @@ public class StructurePlacer
                             this.handler.consume(requiredItems);
                             this.handler.triggerEntitySuccess(localPos, requiredItems, true);
                         }
-                    }
                 }
                 catch (final RuntimeException e)
                 {
@@ -398,21 +400,23 @@ public class StructurePlacer
                 {
                     final BlockPos pos = this.handler.getCenterPos().subtract(handler.getBluePrint().getPrimaryBlockOffset());
 
-                    final Optional<EntityType<?>> type = EntityType.by(compound);
-                    if (type.isPresent())
-                    {
-                        final Entity entity = type.get().create(world);
-                        if (entity != null)
-                        {
-                            entity.deserializeNBT(compound);
+                    final Entity entity = EntityType.loadEntityRecursive(
+                        compound,
+                        world,
+                        new EntitySpawnRequest(EntitySpawnReason.STRUCTURE, false),
+                        loaded -> loaded);
 
+                    if (entity != null)
+                    {
                             entity.setUUID(UUID.randomUUID());
                             Vec3 posInWorld = entity.position().add(pos.getX(), pos.getY(), pos.getZ());
                             if (entity instanceof HangingEntity hang)
                             {
                                 posInWorld = posInWorld.subtract(Vec3.atLowerCornerOf(hang.blockPosition().subtract(hang.getPos())));
                             }
-                            entity.moveTo(posInWorld.x, posInWorld.y, posInWorld.z, entity.getYRot(), entity.getXRot());
+                            entity.setPos(posInWorld.x, posInWorld.y, posInWorld.z);
+                            entity.setYRot(entity.getYRot());
+                            entity.setXRot(entity.getXRot());
 
                             final List<? extends Entity> list = world.getEntitiesOfClass(entity.getClass(), new AABB(posInWorld.add(1,1,1), posInWorld.add(-1,-1,-1)));
                             boolean foundEntity = false;
@@ -463,7 +467,6 @@ public class StructurePlacer
                             this.handler.consume(requiredItems);
                             this.handler.triggerEntitySuccess(localPos, requiredItems, true);
                         }
-                    }
                 }
                 catch (final RuntimeException e)
                 {
@@ -502,7 +505,7 @@ public class StructurePlacer
                         Block block = worldState.getBlock();
                         if (block instanceof BucketPickup) {
                             BucketPickup bucketpickup = (BucketPickup)block;
-                            if (!bucketpickup.pickupBlock(world, worldPos, worldState).isEmpty()) {
+                            if (!bucketpickup.pickupBlock(null, world, worldPos, worldState).isEmpty()) {
                                 continue;
                             }
                         }
@@ -565,14 +568,14 @@ public class StructurePlacer
                 {
                     final BlockPos pos = this.handler.getCenterPos().subtract(handler.getBluePrint().getPrimaryBlockOffset());
 
-                    final Optional<EntityType<?>> type = EntityType.by(compound);
-                    if (type.isPresent())
-                    {
-                        final Entity entity = type.get().create(world);
-                        if (entity != null)
-                        {
-                            entity.deserializeNBT(compound);
+                    final Entity entity = EntityType.loadEntityRecursive(
+                        compound,
+                        world,
+                        new EntitySpawnRequest(EntitySpawnReason.STRUCTURE, false),
+                        loaded -> loaded);
 
+                    if (entity != null)
+                    {
                             final Vec3 posInWorld = entity.position().add(pos.getX(), pos.getY(), pos.getZ());
                             final List<? extends Entity> list = world.getEntitiesOfClass(entity.getClass(), new AABB(posInWorld.add(1,1,1), posInWorld.add(-1,-1,-1)));
                             boolean foundEntity = false;
@@ -592,7 +595,6 @@ public class StructurePlacer
 
                             requiredItems.addAll(ItemStackUtils.getListOfStackForEntity(entity, pos));
                         }
-                    }
                 }
                 catch (final RuntimeException e)
                 {

@@ -9,21 +9,26 @@ import com.ldtteam.structurize.placement.SimplePlacementContext;
 import com.ldtteam.structurize.placement.handlers.placement.IPlacementHandler;
 import com.ldtteam.structurize.placement.handlers.placement.PlacementHandlers;
 import com.ldtteam.structurize.tag.ModTags;
+import net.minecraft.SharedConstants;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.BlockPos.MutableBlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.world.attribute.EnvironmentAttributes;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.*;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -32,6 +37,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.chunk.*;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.*;
 import net.minecraft.world.level.levelgen.blending.Blender;
@@ -41,9 +47,8 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
-import net.minecraftforge.common.util.FakePlayer;
-import net.minecraftforge.registries.GameData;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.neoforged.neoforge.common.util.FakePlayer;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.jetbrains.annotations.Nullable;
 
 import java.text.MessageFormat;
@@ -72,7 +77,7 @@ public final class BlockUtils
         (block, iBlockState) -> BlockUtils.isWater(block.defaultBlockState()),
         (block, iBlockState) -> block instanceof LeavesBlock,
         (block, iBlockState) -> block instanceof DoublePlantBlock,
-        (block, iBlockState) -> block.equals(Blocks.GRASS),
+        (block, iBlockState) -> block.equals(Blocks.GRASS_BLOCK),
         (block, iBlockState) -> block instanceof DoorBlock && iBlockState != null && iBlockState.getValue(BooleanProperty.create("upper")));
 
     /**
@@ -90,10 +95,9 @@ public final class BlockUtils
     {
         if (trueSolidBlocks.isEmpty())
         {
-            ForgeRegistries.BLOCKS.getValues()
-                .stream()
+            BuiltInRegistries.BLOCK.stream()
                 .filter(BlockUtils::canBlockSurviveWithoutSupport)
-                .filter(block -> !block.defaultBlockState().canBeReplaced() && block.hasCollision && !(block instanceof Fallable) && !block.defaultBlockState().isAir()
+                .filter(block -> !block.defaultBlockState().canBeReplaced() && hasCollision(block.defaultBlockState()) && !(block instanceof Fallable) && !block.defaultBlockState().isAir()
                     && !(block instanceof LiquidBlock) && !block.builtInRegistryHolder().is(ModTags.WEAK_SOLID_BLOCKS))
                 .forEach(trueSolidBlocks::add);
         }
@@ -215,10 +219,10 @@ public final class BlockUtils
                 final SurfaceRules.Context ctx = new SurfaceRules.Context(serverLevel.getChunkSource().randomState().surfaceSystem(),
                     serverLevel.getChunkSource().randomState(),
                     chunk,
-                    chunk.getOrCreateNoiseChunk(c -> createNoiseBiome(serverLevel, chunkGenerator, c)),
+                    chunk.getOrCreateNoiseChunk(c -> createNoiseChunk(serverLevel, chunkGenerator, c)),
                     serverLevel.getBiomeManager()::getBiome,
-                    serverLevel.registryAccess().registryOrThrow(Registries.BIOME),
-                    new WorldGenerationContext(chunkGenerator, serverLevel));
+                    new WorldGenerationContext(chunkGenerator, serverLevel),
+                    null);
 
                 final int locX = location.getX();
                 final int locY = location.getY();
@@ -229,7 +233,7 @@ public final class BlockUtils
                 int waterHeight = Integer.MIN_VALUE;
 
                 final MutableBlockPos temp = new MutableBlockPos(locX, locY, locZ);
-                for (int tempY = locY + 1; tempY <= chunk.getMaxBuildHeight() + 1; ++tempY)
+                for (int tempY = locY + 1; tempY <= chunk.getMaxY() + 1; ++tempY)
                 {
                     temp.setY(tempY);
                     final BlockState bs = virtualBlocks == null ? chunk.getBlockState(temp) :
@@ -248,7 +252,7 @@ public final class BlockUtils
                     }
                 }
 
-                for (int tempY = locY - 1; tempY >= chunk.getMinBuildHeight() - 1; --tempY)
+                for (int tempY = locY - 1; tempY >= chunk.getMinY() - 1; --tempY)
                 {
                     temp.setY(tempY);
                     final BlockState bs = virtualBlocks == null ? chunk.getBlockState(temp) :
@@ -263,14 +267,14 @@ public final class BlockUtils
                 stoneDepthBelow = locY - stoneDepthBelow + 1;
 
                 ctx.updateXZ(locX, locZ);
-                ctx.updateY(stoneDepthAbove, stoneDepthBelow, waterHeight, locX, locY, locZ);
+                ctx.updateY(stoneDepthAbove, stoneDepthBelow, waterHeight, locY);
 
                 return generatorSettings.surfaceRule().apply(ctx).tryApply(locX, locY, locZ);
             }
             else if (generator instanceof FlatLevelSource chunkGenerator)
             {
                 final List<BlockState> layers = chunkGenerator.settings().getLayers();
-                final int locY = location.getY() - serverLevel.getMinBuildHeight();
+                final int locY = location.getY() - serverLevel.getMinY();
                 if (locY >= 0 && locY < layers.size())
                 {
                     return layers.get(locY);
@@ -281,39 +285,34 @@ public final class BlockUtils
         return null;
     }
 
-    private static NoiseChunk createNoiseBiome(
+    private static NoiseChunk createNoiseChunk(
         final ServerLevel serverLevel,
         final NoiseBasedChunkGenerator chunkGenerator,
         final ChunkAccess chunk)
     {
-        final int chunkX = chunk.getPos().x;
-        final int chunkZ = chunk.getPos().z;
-        final int chunkRange = ChunkStatus.SURFACE.getRange();
-        final List<ChunkAccess> surroundingChunks = new ArrayList<>(4 * chunkRange * (chunkRange + 1) + 1);
+        final NoiseGeneratorSettings settings = chunkGenerator.generatorSettings().value();
+        return NoiseChunk.forChunk(
+            chunk,
+            serverLevel.getChunkSource().randomState(),
+            Beardifier.forStructuresInChunk(serverLevel.structureManager(), chunk.getPos()),
+            settings,
+            createGlobalFluidPicker(settings),
+            Blender.empty());
+    }
 
-        for (int z = -chunkRange; z <= chunkRange; z++)
-        {
-            for (int x = -chunkRange; x <= chunkRange; x++)
+    private static Aquifer.FluidPicker createGlobalFluidPicker(final NoiseGeneratorSettings settings)
+    {
+        final Aquifer.FluidStatus lavaStatus = new Aquifer.FluidStatus(-54, Blocks.LAVA.defaultBlockState());
+        final int seaLevel = settings.seaLevel();
+        final Aquifer.FluidStatus seaStatus = new Aquifer.FluidStatus(seaLevel, settings.defaultFluid());
+        final Aquifer.FluidStatus emptyStatus = new Aquifer.FluidStatus(DimensionType.MIN_Y * 2, Blocks.AIR.defaultBlockState());
+        return (x, y, z) -> {
+            if (SharedConstants.DEBUG_DISABLE_FLUID_GENERATION)
             {
-                ChunkAccess surroundingChunk = serverLevel.getChunk(chunkX + x, chunkZ + z, ChunkStatus.SURFACE);
-   
-                if (surroundingChunk instanceof ImposterProtoChunk imposterProtoChunk)
-                {
-                    surroundingChunk = new ImposterProtoChunk(imposterProtoChunk.getWrapped(), true);
-                }
-                else if (surroundingChunk instanceof LevelChunk levelChunk)
-                {
-                    surroundingChunk = new ImposterProtoChunk(levelChunk, true);
-                }
-   
-                surroundingChunks.add(surroundingChunk);
+                return emptyStatus;
             }
-        }
-        final WorldGenRegion worldGenRegion = new OurWorldGenRegion(serverLevel, surroundingChunks);
-        return chunkGenerator.createNoiseChunk(chunk,
-            serverLevel.structureManager().forWorldGenRegion(worldGenRegion),
-            Blender.of(worldGenRegion),
-            serverLevel.getChunkSource().randomState());
+            return y < Math.min(-54, seaLevel) ? lavaStatus : seaStatus;
+        };
     }
 
     /**
@@ -336,7 +335,7 @@ public final class BlockUtils
         }
         else if (block instanceof CropBlock)
         {
-            final ItemStack stack = ((CropBlock) block).getCloneItemStack(null, null, blockState);
+            final ItemStack stack = block.getCloneItemStack(null, null, blockState, false, null);
             if (stack != null)
             {
                 return stack.getItem();
@@ -345,7 +344,7 @@ public final class BlockUtils
             return Items.WHEAT_SEEDS;
         }
         // oh no... 
-        else if (block instanceof FarmBlock || block instanceof DirtPathBlock)
+        else if (block instanceof FarmlandBlock || block instanceof DirtPathBlock)
         {
             return getItemFromBlock(Blocks.DIRT);
         }
@@ -355,7 +354,7 @@ public final class BlockUtils
         }
         else if (block instanceof FlowerPotBlock)
         {
-            return Items.FLOWER_POT;
+            return getItemFromBlock(((FlowerPotBlock) block).getPotted());
         }
         else if (block == Blocks.BAMBOO_SAPLING)
         {
@@ -369,7 +368,7 @@ public final class BlockUtils
 
     private static Item getItemFromBlock(final Block block)
     {
-        return GameData.getBlockItemMap().get(block);
+        return Item.BY_BLOCK.get(block);
     }
 
     /**
@@ -418,7 +417,7 @@ public final class BlockUtils
                 tag.putInt("x", worldEntity.getBlockPos().getX());
                 tag.putInt("y", worldEntity.getBlockPos().getY());
                 tag.putInt("z", worldEntity.getBlockPos().getZ());
-                return Utils.nbtContains(tag, worldEntity.saveWithFullMetadata());
+                return Utils.nbtContains(tag, worldEntity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)));
             }
             return true;
         }
@@ -486,7 +485,7 @@ public final class BlockUtils
         }
         else if (stack.getItem() instanceof BucketItem)
         {
-            return ((BucketItem) stack.getItem()).getFluid().defaultFluidState().createLegacyBlock();
+            return ((BucketItem) stack.getItem()).getContent().defaultFluidState().createLegacyBlock();
         }
         else if (stack.getItem() instanceof BlockItem)
         {
@@ -506,7 +505,7 @@ public final class BlockUtils
     {
         if (blockState.getBlock() instanceof final LiquidBlock liquid)
         {
-            return new ItemStack(liquid.getFluid().getBucket(), 1);
+            return new ItemStack(liquid.fluid.getBucket(), 1);
         }
         final Item item = getItem(blockState);
         if (item != Items.AIR && item != null)
@@ -539,7 +538,7 @@ public final class BlockUtils
         {
             final IPlacementHandler handler = PlacementHandlers.getHandler(world, BlockPos.ZERO, blockState);
             final List<ItemStack> itemList =
-              handler.getRequiredItems(world, position, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(), new SimplePlacementContext(false, new PlacementSettings()));
+              handler.getRequiredItems(world, position, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), new SimplePlacementContext(false, new PlacementSettings()));
             if (!itemList.isEmpty() && ItemStackUtils.compareItemStacksIgnoreStackSize(itemList.get(0), block))
             {
                 isMatch = true;
@@ -608,12 +607,12 @@ public final class BlockUtils
         {
             final Block sourceBlock = blockState.getBlock();
             final BucketItem bucket = (BucketItem) item;
-            final Fluid fluid = bucket.getFluid();
+            final Fluid fluid = bucket.getContent();
 
             // place
             if (sourceBlock instanceof final LiquidBlockContainer liquidContainer)
             {
-                if (liquidContainer.canPlaceLiquid(world, here, blockState, fluid))
+                if (liquidContainer.canPlaceLiquid(null, world, here, blockState, fluid))
                 {
                     liquidContainer.placeLiquid(world, here, blockState, fluid.defaultFluidState());
                     bucket.checkExtraContent(null, world, stackToPlace, here);
@@ -643,7 +642,7 @@ public final class BlockUtils
     {
         final BlockState state = world.getBlockState(pos);
         final Block block = state.getBlock();
-        if((!(block instanceof final BucketPickup bucketBlock) || bucketBlock.pickupBlock(world, pos, state).isEmpty()) && block instanceof LiquidBlock)
+        if((!(block instanceof final BucketPickup bucketBlock) || bucketBlock.pickupBlock(null, world, pos, state).isEmpty()) && block instanceof LiquidBlock)
         {
             world.setBlock(pos, Blocks.AIR.defaultBlockState(), Constants.UPDATE_FLAG);
         }
@@ -668,7 +667,9 @@ public final class BlockUtils
                 }
             }
         }
-        return world == null || !world.dimensionType().ultraWarm() ? Blocks.WATER.defaultBlockState() : Blocks.LAVA.defaultBlockState();
+        return world == null || !world.environmentAttributes().getValue(EnvironmentAttributes.WATER_EVAPORATES, BlockPos.ZERO)
+            ? Blocks.WATER.defaultBlockState()
+            : Blocks.LAVA.defaultBlockState();
     }
 
     /**
@@ -736,44 +737,6 @@ public final class BlockUtils
         return newState;
     }
 
-    private static class OurWorldGenRegion extends WorldGenRegion
-    {
-        private OurWorldGenRegion(ServerLevel p_143484_, List<ChunkAccess> p_143485_)
-        {
-            super(p_143484_, p_143485_, ChunkStatus.SURFACE, -1);
-        }
-
-        @Override
-        public boolean destroyBlock(BlockPos p_9550_, boolean p_9551_, @Nullable Entity p_9552_, int p_9553_)
-        {
-            return false;
-        }
-
-        @Override
-        public boolean ensureCanWrite(BlockPos p_181031_)
-        {
-            return false;
-        }
-
-        @Override
-        public boolean setBlock(BlockPos p_9539_, BlockState p_9540_, int p_9541_, int p_9542_)
-        {
-            return false;
-        }
-
-        @Override
-        public boolean addFreshEntity(Entity p_9580_)
-        {
-            return false;
-        }
-
-        @Override
-        public boolean removeBlock(BlockPos p_9547_, boolean p_9548_)
-        {
-            return false;
-        }
-    }
-
     /**
      * @return true iff block can exist without any support (cannot decay, {@link Block#canSurvive(BlockState, LevelReader, BlockPos)} ()} always return true)
      */
@@ -781,7 +744,7 @@ public final class BlockUtils
     {
         if (blockState.getBlock() instanceof final LeavesBlock leaves)
         {
-            return !leaves.isRandomlyTicking(blockState);
+            return !isDecayingLeaves(blockState);
         }
         return trueSolidBlocks.contains(blockState.getBlock());
     }
@@ -809,10 +772,10 @@ public final class BlockUtils
     {
         if (blockState.getBlock() instanceof final LeavesBlock leaves)
         {
-            return leaves.isRandomlyTicking(blockState);
+            return isDecayingLeaves(blockState);
         }
 
-        if (blockState.canBeReplaced() || !blockState.getBlock().hasCollision)
+        if (blockState.canBeReplaced() || !hasCollision(blockState))
         {
             return false;
         }
@@ -823,19 +786,29 @@ public final class BlockUtils
 
     public static boolean canBlockSurviveWithoutSupport(final Block block)
     {
-        // TODO: add tag
-        if (block instanceof FarmBlock || block instanceof DirtPathBlock)
+        if (block instanceof FarmlandBlock || block instanceof DirtPathBlock)
         {
             return true;
         }
         try
         {
-            return block.canSurvive(block.defaultBlockState(), null, null);
+            return block.defaultBlockState().canSurvive(null, null);
         }
-        catch (final Exception e)
+        catch (final NullPointerException e)
         {
+            // Survival checks commonly inspect neighbouring states; registry scanning has neither.
             return false;
         }
+    }
+
+    private static boolean hasCollision(final BlockState blockState)
+    {
+        return !blockState.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).isEmpty();
+    }
+
+    private static boolean isDecayingLeaves(final BlockState blockState)
+    {
+        return blockState.getValue(LeavesBlock.DISTANCE) == 7 && !blockState.getValue(LeavesBlock.PERSISTENT);
     }
 
     /**
@@ -847,7 +820,7 @@ public final class BlockUtils
     {
         try
         {
-            return block.getShape(null, null) == Shapes.block();
+            return block.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO) == Shapes.block();
         }
         catch (final Exception e)
         {
@@ -877,4 +850,5 @@ public final class BlockUtils
             return canFloatInAir || isWeakSolid;
         }
     }
+
 }

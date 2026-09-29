@@ -9,6 +9,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.UUID;
@@ -52,7 +53,9 @@ public class RemoveEntityOperation extends BaseOperation
     @Override
     public boolean apply(final ServerLevel world)
     {
-        final List<Entity> list = world.getEntitiesOfClass(Entity.class, new AABB(startPos, endPos));
+        final List<Entity> list = world.getEntitiesOfClass(
+            Entity.class,
+            new AABB(Vec3.atLowerCornerOf(startPos), Vec3.atLowerCornerOf(endPos)));
         storage.addEntities(list);
 
         int count = 0;

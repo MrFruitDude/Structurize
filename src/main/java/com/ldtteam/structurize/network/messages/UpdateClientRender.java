@@ -2,9 +2,11 @@ package com.ldtteam.structurize.network.messages;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -58,11 +60,15 @@ public class UpdateClientRender implements IMessage
 
     @SuppressWarnings("resource")
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         if (!isLogicalServer)
         {
-            Minecraft.getInstance().levelRenderer.setBlocksDirty(from.getX(), from.getY(), from.getZ(), to.getX(), to.getY(), to.getZ());
+            final ClientLevel level = Minecraft.getInstance().level;
+            for (BlockPos pos : BlockPos.betweenClosed(from, to))
+            {
+                level.sendBlockUpdated(pos, level.getBlockState(pos), level.getBlockState(pos), Block.UPDATE_ALL);
+            }
         }
     }
 }

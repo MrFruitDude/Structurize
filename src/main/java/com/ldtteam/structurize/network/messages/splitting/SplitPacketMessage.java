@@ -9,8 +9,8 @@ import com.ldtteam.structurize.network.messages.IMessage;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
@@ -85,7 +85,7 @@ public class SplitPacketMessage implements IMessage
     }
 
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
         try
         {
@@ -119,14 +119,14 @@ public class SplitPacketMessage implements IMessage
             buffer.release();
 
             //Execute the message.
-            final LogicalSide packetOrigin = ctxIn.getDirection().getOriginationSide();
+            final LogicalSide packetOrigin = ctxIn.isClientOrigin() ? LogicalSide.CLIENT : LogicalSide.SERVER;
             if (message.getExecutionSide() != null && packetOrigin.equals(message.getExecutionSide()))
             {
                 Log.getLogger().warn("Receving {} at wrong side!", message.getClass().getName());
                 return;
             }
             // boolean param MUST equals true if packet arrived at logical server
-            ctxIn.enqueueWork(() -> message.onExecute(ctxIn, packetOrigin.equals(LogicalSide.CLIENT)));
+            ctxIn.enqueueWork(() -> message.onExecute(ctxIn, packetOrigin == LogicalSide.SERVER));
         }
         catch (ExecutionException e)
         {

@@ -1,17 +1,19 @@
 package com.ldtteam.structurize.items;
 
 import com.ldtteam.structurize.api.util.Utils;
+import com.ldtteam.structurize.api.util.BlockPosUtil;
+import com.ldtteam.structurize.util.ItemStackNbtHelper;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Tuple;
+import com.ldtteam.structurize.api.util.Tuple;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtUtils;
-import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResult.Success;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -65,37 +67,37 @@ public abstract class AbstractItemWithPosSelector extends Item
      * {@inheritDoc}
      */
     @Override
-    public InteractionResultHolder<ItemStack> use(final Level worldIn, final Player playerIn, final InteractionHand handIn)
+    public InteractionResult use(final Level worldIn, final Player playerIn, final InteractionHand handIn)
     {
         final ItemStack itemstack = playerIn.getItemInHand(handIn);
-        final CompoundTag compound = itemstack.getOrCreateTag();
+        final CompoundTag compound = ItemStackNbtHelper.getOrCreateCustomTag(itemstack);
 
         if (!compound.contains(NBT_START_POS))
         {
             if (worldIn.isClientSide())
             {
-                playerIn.displayClientMessage(Component.translatable(MISSING_POS_TKEY + "1"), false);
+                playerIn.sendSystemMessage(Component.translatable(MISSING_POS_TKEY + "1"));
             }
-            return InteractionResultHolder.fail(itemstack);
+            return InteractionResult.FAIL;
         }
 
         if (!compound.contains(NBT_END_POS))
         {
             if (worldIn.isClientSide())
             {
-                playerIn.displayClientMessage(Component.translatable(MISSING_POS_TKEY + "2"), false);
+                playerIn.sendSystemMessage(Component.translatable(MISSING_POS_TKEY + "2"));
             }
-            return InteractionResultHolder.fail(itemstack);
+            return InteractionResult.FAIL;
         }
 
-        return new InteractionResultHolder<>(
+        final InteractionResult result =
             onAirRightClick(
-                NbtUtils.readBlockPos(compound.getCompound(NBT_START_POS)),
-                NbtUtils.readBlockPos(compound.getCompound(NBT_END_POS)),
+                BlockPosUtil.readFromNBT(compound, NBT_START_POS),
+                BlockPosUtil.readFromNBT(compound, NBT_END_POS),
                 worldIn,
                 playerIn,
-                itemstack),
-            itemstack);
+                itemstack);
+        return result instanceof final Success success ? success.heldItemTransformedTo(itemstack) : result;
     }
 
     /**
@@ -108,10 +110,10 @@ public abstract class AbstractItemWithPosSelector extends Item
         final BlockPos pos = context.getClickedPos();
         if (context.getLevel().isClientSide())
         {
-            context.getPlayer().displayClientMessage(Component.translatable(END_POS_TKEY, pos.getX(), pos.getY(), pos.getZ()), false);
+            context.getPlayer().sendSystemMessage(Component.translatable(END_POS_TKEY, pos.getX(), pos.getY(), pos.getZ()));
             Utils.playSuccessSound(context.getPlayer());
         }
-        context.getItemInHand().getOrCreateTag().put(NBT_END_POS, NbtUtils.writeBlockPos(pos));
+        BlockPosUtil.writeToNBT(ItemStackNbtHelper.getOrCreateCustomTag(context.getItemInHand()), NBT_END_POS, pos);
         return InteractionResult.SUCCESS;
     }
 
@@ -120,18 +122,27 @@ public abstract class AbstractItemWithPosSelector extends Item
      * {@inheritDoc}
      */
     @Override
-    public boolean canAttackBlock(final BlockState state, final Level worldIn, final BlockPos pos, final Player player)
+    public boolean canDestroyBlock(final ItemStack selectedStack,
+        final BlockState state,
+        final Level worldIn,
+        final BlockPos pos,
+        final LivingEntity entity)
     {
+        if (!(entity instanceof final Player player) || !player.isShiftKeyDown())
+        {
+            return super.canDestroyBlock(selectedStack, state, worldIn, pos, entity);
+        }
+
         ItemStack itemstack = player.getMainHandItem();
         if (!itemstack.getItem().equals(getRegisteredItemInstance()))
         {
             itemstack = player.getOffhandItem();
         }
-        itemstack.getOrCreateTag().put(NBT_START_POS, NbtUtils.writeBlockPos(pos));
-        if (player.getCommandSenderWorld().isClientSide())
+        BlockPosUtil.writeToNBT(ItemStackNbtHelper.getOrCreateCustomTag(itemstack), NBT_START_POS, pos);
+        if (player.level().isClientSide())
         {
             Utils.playSuccessSound(player);
-            player.displayClientMessage(Component.translatable(START_POS_TKEY, pos.getX(), pos.getY(), pos.getZ()), false);
+            player.sendSystemMessage(Component.translatable(START_POS_TKEY, pos.getX(), pos.getY(), pos.getZ()));
         }
         return false;
     }
@@ -155,9 +166,9 @@ public abstract class AbstractItemWithPosSelector extends Item
                                  @NotNull final BlockPos start,
                                  @NotNull final BlockPos end)
     {
-        final CompoundTag tag = tool.getOrCreateTag();
-        tag.put(NBT_START_POS, NbtUtils.writeBlockPos(start));
-        tag.put(NBT_END_POS, NbtUtils.writeBlockPos(end));
+        final CompoundTag tag = ItemStackNbtHelper.getOrCreateCustomTag(tool);
+        BlockPosUtil.writeToNBT(tag, NBT_START_POS, start);
+        BlockPosUtil.writeToNBT(tag, NBT_END_POS, end);
     }
 
     /**
@@ -167,9 +178,9 @@ public abstract class AbstractItemWithPosSelector extends Item
      */
     public static Tuple<BlockPos, BlockPos> getBounds(@NotNull final ItemStack tool)
     {
-        final CompoundTag tag = tool.getOrCreateTag();
-        final BlockPos start = NbtUtils.readBlockPos(tag.getCompound(NBT_START_POS));
-        final BlockPos end = NbtUtils.readBlockPos(tag.getCompound(NBT_END_POS));
+        final CompoundTag tag = ItemStackNbtHelper.getOrCreateCustomTag(tool);
+        final BlockPos start = BlockPosUtil.readFromNBT(tag, NBT_START_POS);
+        final BlockPos end = BlockPosUtil.readFromNBT(tag, NBT_END_POS);
         return new Tuple<>(start, end);
     }
 }

@@ -9,87 +9,82 @@ import com.ldtteam.structurize.client.fakelevel.BlueprintBlockAccess;
 import com.ldtteam.structurize.storage.rendering.types.BlueprintPreviewData;
 import com.ldtteam.structurize.tag.ModTags;
 import com.ldtteam.structurize.util.BlockInfo;
-import com.ldtteam.structurize.util.BlueprintMissHitResult;
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.platform.GlStateManager.DestFactor;
-import com.mojang.blaze3d.platform.GlStateManager.SourceFactor;
-import com.mojang.blaze3d.platform.Lighting;
-import com.mojang.blaze3d.shaders.Uniform;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferBuilder.RenderedBuffer;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexBuffer;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.CrashReport;
 import net.minecraft.CrashReportCategory;
 import net.minecraft.ReportedException;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.*;
-import net.minecraft.client.renderer.block.BlockRenderDispatcher;
-import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
-import net.minecraft.client.renderer.culling.Frustum;
-import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.block.FluidRenderer;
+import net.minecraft.client.renderer.block.ModelBlockRenderer;
+import net.minecraft.client.renderer.block.MovingBlockRenderState;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
+import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
+import net.minecraft.util.ARGB;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.inventory.InventoryMenu;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.SkullBlock;
-import net.minecraft.world.level.block.entity.*;
+import net.minecraft.world.level.block.entity.BeaconBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.CampfireBlockEntity;
+import net.minecraft.world.level.block.entity.EnchantingTableBlockEntity;
+import net.minecraft.world.level.block.entity.SkullBlockEntity;
+import net.minecraft.world.level.block.entity.SpawnerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
-import net.minecraftforge.client.model.data.ModelData;
-import org.joml.Matrix4f;
-import org.joml.Vector3f;
-import org.lwjgl.opengl.GL20C;
+import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
+import net.neoforged.neoforge.model.data.ModelData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
- * The renderer for blueprint.
- * Holds all information required to render a blueprint.
+ * Prepares and submits blueprint preview geometry through Minecraft's current level render pipeline.
  */
 public class BlueprintRenderer implements AutoCloseable
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(BlueprintRenderer.class);
-    private static final Supplier<Map<RenderType, VertexBuffer>> blockVertexBuffersFactory = () -> RenderType.chunkBufferLayers()
-        .stream()
-        .collect(Collectors.toMap((type) -> type, (type) -> new VertexBuffer(VertexBuffer.Usage.STATIC)));
-    // TODO: remove when forge events
-    private static final RenderBuffers renderBuffers = new RenderBuffers();
+    public static final float TRANSPARENCY_THRESHOLD = 0.99F;
     private static boolean hasWarnedExceptions = false;
 
     private final BlueprintBlockAccess blockAccess;
-    private List<Entity> entities;
-    private List<BlockEntity> tileEntities;
-    private Map<RenderType, VertexBuffer> vertexBuffers;
+    private final List<Entity> entities = new ArrayList<>();
+    private final List<BlockEntity> tileEntities = new ArrayList<>();
+    private final List<MovingBlockRenderState> blockStates = new ArrayList<>();
+    private final List<FluidInstance> fluidInstances = new ArrayList<>();
     private long lastGameTime;
-    private boolean bypassMainFrustum = false;
     private Set<Object> crashingObjects = Collections.newSetFromMap(new IdentityHashMap<>());
 
-    /**
-     * Static factory utility method to handle the extraction of the values from the blueprint.
-     *
-     * @param blueprint The blueprint to create an instance for.
-     * @return The renderer.
-     */
     public static BlueprintRenderer buildRendererForBlueprint(final Blueprint blueprint)
     {
-        final BlueprintBlockAccess blockAccess = new BlueprintBlockAccess(blueprint);
-        return new BlueprintRenderer(blockAccess);
+        return new BlueprintRenderer(new BlueprintBlockAccess(blueprint));
     }
 
     private BlueprintRenderer(final BlueprintBlockAccess blockAccess)
@@ -97,14 +92,10 @@ public class BlueprintRenderer implements AutoCloseable
         this.blockAccess = blockAccess;
     }
 
-    /**
-     * Updates blueprint reference if it has same hash.
-     *
-     * @param previewData blueprint and context from active structure
-     */
     public void updateBlueprint(final BlueprintPreviewData previewData)
     {
-        if (blockAccess.getLevelSource() != previewData.getBlueprint() && blockAccess.getLevelSource().hashCode() == previewData.getBlueprint().hashCode())
+        if (blockAccess.getLevelSource() != previewData.getBlueprint()
+            && blockAccess.getLevelSource().hashCode() == previewData.getBlueprint().hashCode())
         {
             blockAccess.setLevelSource(previewData.getBlueprint());
         }
@@ -112,123 +103,112 @@ public class BlueprintRenderer implements AutoCloseable
 
     private void init(final BlueprintPreviewData previewData, final Map<Object, Exception> suppressedExceptions)
     {
+        final Minecraft minecraft = Minecraft.getInstance();
         final Blueprint blueprint = previewData.getBlueprint();
-        final BlockRenderDispatcher blockRenderer = Minecraft.getInstance().getBlockRenderer();
-        final RandomSource random = RandomSource.create();
-
-        clearVertexBuffers();
+        // Blueprint tile entities can contribute model data that is required by
+        // their block models (for example, Domum Ornamentum and MineColonies
+        // blocks). Keep that data keyed by the blueprint-local position just as
+        // the legacy baked-model renderer did. Passing ModelData.EMPTY for all
+        // blocks makes those models collect no render parts, which leaves only
+        // the placement outline visible in the preview.
         final Map<BlockPos, ModelData> teModelData = new HashMap<>();
-        final Map<BlockPos, BlockEntity> tileEntitiesMap = BlueprintUtils.instantiateTileEntities(blueprint, blockAccess, teModelData);
-        entities = BlueprintUtils.instantiateEntities(blueprint, blockAccess);
+
+        clearCachedState();
+
+        final Map<BlockPos, BlockEntity> tileEntitiesMap =
+            BlueprintUtils.instantiateTileEntities(blueprint, blockAccess, teModelData);
+        entities.addAll(BlueprintUtils.instantiateEntities(blueprint, blockAccess));
 
         blockAccess.setBlockEntities(tileEntitiesMap);
         blockAccess.setEntities(entities);
         blockAccess.setSolidSubstitutionOverride(previewData.getSolidSubstitutionOverride());
         blockAccess.setRenderBlocksNiceOverride(previewData.getRenderBlocksNice());
 
-        final PoseStack matrixStack = new PoseStack();
-        matrixStack.translate(0.01, 0.01, 0.01);
-        final ChunkBufferBuilderPack newBuffers = new OurChunkBufferBuilderPack();
-        final RenderType[] blockRenderTypes = RenderType.chunkBufferLayers().toArray(RenderType[]::new);
-
         for (final BlockInfo blockInfo : blueprint.getBlockInfoAsList())
         {
             final BlockPos blockPos = blockInfo.getPos();
             BlockState state = blockInfo.getState();
-            // specially handle blockTagSub here cuz of block entity changes
-            if (previewData.getRenderBlocksNice() && state.getBlock() == ModBlocks.blockTagSubstitution.get())
-            {
-                if (tileEntitiesMap.remove(blockPos) instanceof final BlockEntityTagSubstitution tagTE)
-                {
-                    final BlockEntityTagSubstitution.ReplacementBlock replacement = tagTE.getReplacement();
-                    state = replacement.getBlockState();
 
-                    Optional.ofNullable(replacement.createBlockEntity(blockPos)).ifPresent(newBe -> {
-                        newBe.setLevel(blockAccess);
-                        teModelData.put(blockPos, newBe.getModelData());
-                        tileEntitiesMap.put(blockPos, newBe);
-                    });
+            try
+            {
+                if (previewData.getRenderBlocksNice() && state.getBlock() == ModBlocks.blockTagSubstitution.get())
+                {
+                    if (tileEntitiesMap.remove(blockPos) instanceof final BlockEntityTagSubstitution tagTE)
+                    {
+                        final BlockEntityTagSubstitution.ReplacementBlock replacement = tagTE.getReplacement();
+                        state = replacement.getBlockState();
+
+                        Optional.ofNullable(replacement.createBlockEntity(blockPos)).ifPresent(newBe -> {
+                            newBe.setLevel(blockAccess);
+                            teModelData.put(blockPos, newBe.getModelData());
+                            tileEntitiesMap.put(blockPos, newBe);
+                        });
+                    }
+                    else
+                    {
+                        state = Blocks.AIR.defaultBlockState();
+                    }
                 }
                 else
                 {
-                    state = Blocks.AIR.defaultBlockState();
+                    state = blockAccess.prepareBlockStateForRendering(state, blockPos);
                 }
-            }
-            else
-            {
-                state = blockAccess.prepareBlockStateForRendering(state, blockPos);
-            }
 
-            final FluidState fluidState = state.getFluidState();
-            try
-            {
+                if (state.isAir())
+                {
+                    continue;
+                }
+
+                final FluidState fluidState = state.getFluidState();
                 if (!fluidState.isEmpty())
                 {
-                    final RenderType renderType = ItemBlockRenderTypes.getRenderLayer(fluidState);
-
-                    final int chunkOffsetX = blockPos.getX() - (blockPos.getX() & 15),
-                        chunkOffsetY = blockPos.getY() - (blockPos.getY() & 15),
-                        chunkOffsetZ = blockPos.getZ() - (blockPos.getZ() & 15);
-
-                    final BufferBuilder buffer = ChunkOffsetBufferBuilderWrapper
-                        .setupGlobalInstance(newBuffers.builder(renderType), chunkOffsetX, chunkOffsetY, chunkOffsetZ);
-                    blockRenderer.renderLiquid(blockPos, blockAccess, buffer, state, fluidState);
+                    fluidInstances.add(new FluidInstance(blockPos, state, fluidState));
                 }
 
                 if (state.getRenderShape() != RenderShape.INVISIBLE)
                 {
-                    final BakedModel blockModel = blockRenderer.getBlockModel(state);
-                    final ModelData modelData = blockModel.getModelData(blockAccess, blockPos, state, teModelData.getOrDefault(blockPos, ModelData.EMPTY));
-
-                    matrixStack.pushPose();
-                    matrixStack.translate(blockPos.getX(), blockPos.getY(), blockPos.getZ());
-
-                    for (final RenderType renderType : blockModel.getRenderTypes(state, random, modelData))
-                    {
-                        final BufferBuilder buffer = newBuffers.builder(renderType);
-                        blockRenderer.renderBatched(state, blockPos, blockAccess, matrixStack, buffer, true, random, modelData, renderType);
-                        renderType.clearRenderState();
-                    }
-                    matrixStack.popPose();
+                    blockStates.add(createMovingBlockState(
+                        minecraft,
+                        blockPos,
+                        state,
+                        teModelData.getOrDefault(blockPos, ModelData.EMPTY)));
                 }
-
             }
-            catch (final ReportedException e)
+            catch (final ReportedException exception)
             {
-                suppressedExceptions.put(blockInfo, e);
+                suppressedExceptions.put(blockInfo, exception);
             }
         }
 
         blockAccess.setSolidSubstitutionOverride(null);
         blockAccess.setRenderBlocksNiceOverride(Structurize.getConfig().getClient().renderPlaceholdersNice.get());
-
-        vertexBuffers = blockVertexBuffersFactory.get();
-        for (final RenderType renderType : blockRenderTypes)
-        {
-            final RenderedBuffer newBuffer = newBuffers.builder(renderType).endOrDiscardIfEmpty();
-            if (newBuffer == null)
-            {
-                vertexBuffers.remove(renderType);
-            }
-            else
-            {
-                final VertexBuffer vertexBuffer = vertexBuffers.get(renderType);
-                vertexBuffer.bind();
-                vertexBuffer.upload(newBuffer);
-            }
-        }
-        newBuffers.clearAll();
-        VertexBuffer.unbind();
-
-        tileEntities = new ArrayList<>(tileEntitiesMap.values());
+        tileEntities.addAll(tileEntitiesMap.values());
     }
 
-    /**
-     * Draws structure into world.
-     */
-    public void draw(final BlueprintPreviewData previewData, final BlockPos pos, final RenderLevelStageEvent ctx)
+    private MovingBlockRenderState createMovingBlockState(
+        final Minecraft minecraft,
+        final BlockPos pos,
+        final BlockState state,
+        final ModelData modelData)
     {
-        // we've crashed hard before, full skip
+        final MovingBlockRenderState renderState = new MovingBlockRenderState();
+        renderState.randomSeedPos = pos;
+        renderState.blockPos = pos;
+        renderState.blockState = state;
+        renderState.modelData = modelData;
+        renderState.cardinalLighting = minecraft.level.cardinalLighting();
+        renderState.lightEngine = blockAccess.getLightEngine();
+
+        final ClientLevel realLevel = minecraft.level;
+        if (realLevel != null)
+        {
+            renderState.biome = realLevel.getBiome(blockAccess.getWorldPos().offset(pos));
+        }
+        return renderState;
+    }
+
+    public void draw(final BlueprintPreviewData previewData, final BlockPos pos, final SubmitCustomGeometryEvent ctx)
+    {
         if (crashingObjects == null)
         {
             return;
@@ -236,493 +216,472 @@ public class BlueprintRenderer implements AutoCloseable
 
         try
         {
-            final Map<Object, Exception> suppressedExceptions = drawUnsafe(previewData, pos, ctx);
-            if (!suppressedExceptions.isEmpty())
-            {
-                if (!hasWarnedExceptions)
-                {
-                    hasWarnedExceptions = true;
-                    Minecraft.getInstance().player.sendSystemMessage(Component.translatable("structurize.preview_renderer.exception"));
-                }
-
-                boolean crashReported = false;
-                boolean isEmpty = true;
-                for (final Map.Entry<Object, Exception> e : suppressedExceptions.entrySet())
-                {
-                    if (!crashingObjects.add(e.getKey()))
-                    {
-                        continue;
-                    }
-                    isEmpty = false;
-
-                    if (e.getValue() instanceof final ReportedException reportedException)
-                    {
-                        previewData.getBlueprint()
-                            .describeSelfInCrashReport(reportedException.getReport().addCategory("Rendering blueprint"));
-                        LOGGER.error(reportedException.getReport().getDetails());
-                        crashReported = true;
-                    }
-                    else
-                    {
-                        LOGGER.error("", e.getValue());
-                    }
-                }
-
-                if (!crashReported && !isEmpty)
-                {
-                    final CrashReport crashReport = CrashReport.forThrowable(new Exception(), "Summary");
-                    previewData.getBlueprint().describeSelfInCrashReport(crashReport.addCategory("Rendering blueprint"));
-                    LOGGER.error(crashReport.getDetails());
-                }
-            }
+            reportSuppressedExceptions(previewData, drawUnsafe(previewData, pos, ctx));
         }
-        catch (final Exception e)
+        catch (final Exception exception)
         {
-            final CrashReport crashReport = CrashReport.forThrowable(e, "Rendering blueprint");
+            final CrashReport crashReport = CrashReport.forThrowable(exception, "Rendering blueprint");
             final CrashReportCategory category = crashReport.addCategory("Blueprint:");
             previewData.getBlueprint().describeSelfInCrashReport(category);
             LOGGER.error(crashReport.getDetails());
 
             crashingObjects = null;
-            Minecraft.getInstance().player.sendSystemMessage(
-                Component.translatable("structurize.preview_renderer.cannot_render", previewData.getBlueprint().getName()));
+            final var player = Minecraft.getInstance().player;
+            if (player != null)
+            {
+                player.sendSystemMessage(Component.translatable(
+                    "structurize.preview_renderer.cannot_render", previewData.getBlueprint().getName()));
+            }
         }
     }
 
-    /**
-     * Draws structure into world.
-     * 
-     * @return suppressed exceptions
-     */
-    public Map<Object, Exception> drawUnsafe(final BlueprintPreviewData previewData, final BlockPos pos, final RenderLevelStageEvent ctx)
+    private void reportSuppressedExceptions(
+        final BlueprintPreviewData previewData,
+        final Map<Object, Exception> suppressedExceptions)
     {
-        final BlockPos anchorPos = pos.subtract(previewData.getBlueprint().getPrimaryBlockOffset());
-
-        // cull entire rendering
-        if (!ctx.getFrustum().isVisible(previewData.getBlueprint().getAABB().move(anchorPos)) && !bypassMainFrustum)
+        if (suppressedExceptions.isEmpty())
         {
-            return Map.of();
-        }
-     
-        final Map<Object, Exception> suppressedExceptions = new IdentityHashMap<>();
-        final Minecraft mc = Minecraft.getInstance();
-        final long gameTime = mc.level.getGameTime();
-        final PoseStack matrixStack = ctx.getPoseStack();
-        final float partialTicks = ctx.getPartialTick();
-        final Matrix4f mvMatrix = matrixStack.last().pose();
-        final Matrix4f pMatrix = ctx.getProjectionMatrix();
-
-        mc.getProfiler().push("struct_render_init");
-        
-        // make sure instances are synced
-        updateBlueprint(previewData);
-        blockAccess.setWorldPos(anchorPos);
-
-        // init
-        if (vertexBuffers == null)
-        {
-            init(previewData, suppressedExceptions);
+            return;
         }
 
-        mc.getProfiler().popPush("struct_render_prepare");
-        final Vec3 viewPosition = mc.gameRenderer.getMainCamera().getPosition();
-        final Vec3 realRenderRootVecd = Vec3.atLowerCornerOf(anchorPos).subtract(viewPosition);
-        final Vector3f realRenderRootVecf = realRenderRootVecd.toVector3f();
-
-        // cache old dispatchers
-        final Level dispLevel = mc.getBlockEntityRenderDispatcher().level; // they are same for both anyway
-        final Camera dispCamera = mc.getBlockEntityRenderDispatcher().camera; // also same
-        final HitResult beHitResult = mc.getBlockEntityRenderDispatcher().cameraHitResult;
-        final Entity ePickEntity = mc.getEntityRenderDispatcher().crosshairPickEntity;
-
-        final Camera ourCamera = new Camera();
-        ourCamera.setup(blockAccess,
-            dispCamera.getEntity(),
-            !mc.options.getCameraType().isFirstPerson(),
-            mc.options.getCameraType().isMirrored(),
-            partialTicks);
-        ourCamera.setPosition(viewPosition.subtract(anchorPos.getX(), anchorPos.getY(), anchorPos.getZ()));
-
-        mc.getBlockEntityRenderDispatcher().prepare(blockAccess, ourCamera, BlueprintMissHitResult.MISS);
-        mc.getEntityRenderDispatcher().prepare(blockAccess, ourCamera, mc.crosshairPickEntity);
-
-        final Frustum blueprintLocalFrustum = new Frustum(ctx.getFrustum());
-        blueprintLocalFrustum.prepare(ourCamera.getPosition().x(), ourCamera.getPosition().y(), ourCamera.getPosition().z());
-        bypassMainFrustum = false;
-
-        // missing chunk system! else done?
-
-        Lighting.setupLevel(mvMatrix);
-
-        // Render blocks
-
-        if (ctx.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL)
+        if (!hasWarnedExceptions)
         {
-            FogRenderer.setupFog(mc.gameRenderer.getMainCamera(),
-                FogRenderer.FogMode.FOG_TERRAIN,
-                Math.max(mc.gameRenderer.getRenderDistance(), 32.0F),
-                mc.level.effects().isFoggyAt(Mth.floor(viewPosition.x()), Mth.floor(viewPosition.y()))
-                    || mc.gui.getBossOverlay().shouldCreateWorldFog(),
-                partialTicks);
+            hasWarnedExceptions = true;
+            final var player = Minecraft.getInstance().player;
+            if (player != null)
+            {
+                player.sendSystemMessage(Component.translatable("structurize.preview_renderer.exception"));
+            }
         }
 
-        mc.getProfiler().popPush("struct_render_blocks");
-        renderBlockLayer(RenderType.solid(), mvMatrix, pMatrix, realRenderRootVecf, previewData);
-        // FORGE: fix flickering leaves when mods mess up the blurMipmap settings
-        mc.getModelManager().getAtlas(InventoryMenu.BLOCK_ATLAS).setBlurMipmap(false, mc.options.mipmapLevels().get() > 0);
-        renderBlockLayer(RenderType.cutoutMipped(), mvMatrix, pMatrix, realRenderRootVecf, previewData);
-        mc.getModelManager().getAtlas(InventoryMenu.BLOCK_ATLAS).restoreLastBlurMipmap();
-        renderBlockLayer(RenderType.cutout(), mvMatrix, pMatrix, realRenderRootVecf, previewData);
-
-        mc.getProfiler().popPush("struct_render_entities");
-        final MultiBufferSource.BufferSource renderBufferSource = renderBuffers.bufferSource();
-
-        // Entities
-
-        matrixStack.pushPose();
-        matrixStack.translate(realRenderRootVecd.x(), realRenderRootVecd.y(), realRenderRootVecd.z());
-        for (Entity entity : entities)
+        boolean crashReported = false;
+        boolean isEmpty = true;
+        for (final Map.Entry<Object, Exception> entry : suppressedExceptions.entrySet())
         {
-            if (!mc.getEntityRenderDispatcher()
-                .shouldRender(entity,
-                    blueprintLocalFrustum,
-                    ourCamera.getPosition().x(),
-                    ourCamera.getPosition().y(),
-                    ourCamera.getPosition().z()))
+            if (!crashingObjects.add(entry.getKey()))
             {
                 continue;
             }
+            isEmpty = false;
 
-            if (gameTime != lastGameTime && entity.getType().is(ModTags.PREVIEW_TICKING_ENTITIES))
+            if (entry.getValue() instanceof final ReportedException reportedException)
+            {
+                previewData.getBlueprint()
+                    .describeSelfInCrashReport(reportedException.getReport().addCategory("Rendering blueprint"));
+                LOGGER.error(reportedException.getReport().getDetails());
+                crashReported = true;
+            }
+            else
+            {
+                LOGGER.error("", entry.getValue());
+            }
+        }
+
+        if (!crashReported && !isEmpty)
+        {
+            final CrashReport crashReport = CrashReport.forThrowable(new Exception(), "Summary");
+            previewData.getBlueprint().describeSelfInCrashReport(crashReport.addCategory("Rendering blueprint"));
+            LOGGER.error(crashReport.getDetails());
+        }
+    }
+
+    public Map<Object, Exception> drawUnsafe(
+        final BlueprintPreviewData previewData,
+        final BlockPos pos,
+        final SubmitCustomGeometryEvent ctx)
+    {
+        updateBlueprint(previewData);
+        final BlockPos anchorPos = pos.subtract(previewData.getBlueprint().getPrimaryBlockOffset());
+        blockAccess.setWorldPos(anchorPos);
+
+        if (blockStates.isEmpty() && fluidInstances.isEmpty() && entities.isEmpty() && tileEntities.isEmpty())
+        {
+            init(previewData, new IdentityHashMap<>());
+        }
+
+        final Map<Object, Exception> suppressedExceptions = new IdentityHashMap<>();
+        final Minecraft minecraft = Minecraft.getInstance();
+        final long gameTime = minecraft.level.getGameTime();
+        final float partialTicks = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        final Vec3 viewPosition = minecraft.gameRenderer.mainCamera().position();
+        final Vec3 realRoot = Vec3.atLowerCornerOf(anchorPos).subtract(viewPosition);
+
+        final PoseStack poseStack = ctx.getPoseStack();
+        poseStack.pushPose();
+        poseStack.translate(realRoot.x(), realRoot.y(), realRoot.z());
+
+        // This collector is owned by LevelRenderer and is consumed by the
+        // current frame's feature dispatcher. A private SubmitNodeStorage is
+        // never rendered and makes the preview silently disappear.
+        final SubmitNodeCollector collector = ctx.getSubmitNodeCollector();
+        submitBlocks(minecraft, collector, poseStack, previewData);
+        submitFluids(minecraft, collector, poseStack);
+        submitEntities(minecraft, collector, poseStack, gameTime, partialTicks, suppressedExceptions);
+        submitBlockEntities(minecraft, collector, poseStack, anchorPos, gameTime, partialTicks);
+
+        poseStack.popPose();
+        lastGameTime = gameTime;
+        return suppressedExceptions;
+    }
+
+    private void submitBlocks(
+        final Minecraft minecraft,
+        final SubmitNodeCollector collector,
+        final PoseStack poseStack,
+        final BlueprintPreviewData previewData)
+    {
+        final float previewAlpha = previewAlpha(previewData);
+        final boolean blendPreview = previewAlpha >= 0.0F && previewAlpha < TRANSPARENCY_THRESHOLD;
+        final ModelBlockRenderer translucentRenderer = blendPreview
+            ? new ModelBlockRenderer(minecraft.options.ambientOcclusion().get(), false, minecraft.getBlockColors())
+            : null;
+
+        for (final MovingBlockRenderState state : blockStates)
+        {
+            // MovingBlockFeatureRenderer tessellates a block at the origin of
+            // the submitted pose. The render state keeps the local position for
+            // lighting/model-data lookups, but it is not used as a translation.
+            // Apply the blueprint-local offset here or every block collapses at
+            // the anchor (and is effectively hidden by the terrain).
+            final BlockPos blockPos = state.blockPos;
+            poseStack.pushPose();
+            // Retain the small legacy offset to avoid z-fighting with the
+            // terrain when a preview is placed directly on existing blocks.
+            poseStack.translate(blockPos.getX() + 0.01F, blockPos.getY() + 0.01F, blockPos.getZ() + 0.01F);
+            if (!blendPreview)
+            {
+                collector.submitMovingBlock(poseStack, state, 0);
+            }
+            else
+            {
+                final BlockStateModel model = minecraft.getModelManager().getBlockStateModelSet().get(state.blockState);
+                collector.submitCustomGeometry(
+                    poseStack,
+                    RenderTypes.translucentMovingBlock(),
+                    (pose, buffer) -> translucentRenderer.tesselateBlock(
+                        (x, y, z, quad, instance) -> {
+                            instance.multiplyColor(ARGB.color(previewAlpha, -1));
+                            final PoseStack.Pose translatedPose = pose.copy();
+                            translatedPose.translate(x, y, z);
+                            buffer.putBakedQuad(translatedPose, quad, instance);
+                        },
+                        0.0F,
+                        0.0F,
+                        0.0F,
+                        state,
+                        state.blockPos,
+                        state.blockState,
+                        model,
+                        state.blockState.getSeed(state.randomSeedPos)));
+            }
+            poseStack.popPose();
+        }
+    }
+
+    private float previewAlpha(final BlueprintPreviewData previewData)
+    {
+        final float override = previewData.getOverridePreviewTransparency();
+        if (override >= 0.0F)
+        {
+            return override;
+        }
+        return Structurize.getConfig().getClient().rendererTransparency.get().floatValue();
+    }
+
+    private void submitFluids(
+        final Minecraft minecraft,
+        final SubmitNodeCollector collector,
+        final PoseStack poseStack)
+    {
+        if (fluidInstances.isEmpty())
+        {
+            return;
+        }
+
+        final FluidRenderer fluidRenderer = new FluidRenderer(minecraft.getModelManager().getFluidStateModelSet());
+        for (final FluidInstance instance : fluidInstances)
+        {
+            final ChunkSectionLayer sectionLayer = minecraft.getModelManager().getFluidStateModelSet()
+                .get(instance.fluidState()).layer();
+            final RenderType renderType = movingRenderType(sectionLayer);
+
+            final BlockAndTintGetter fluidLevel = new BlueprintBlockTintGetter();
+            // FluidRenderer emits section-local coordinates (the same contract
+            // used by the old chunk-buffer wrapper). Translate the pose by the
+            // section origin so fluids keep their blueprint-local position.
+            final BlockPos fluidPos = instance.pos();
+            final int sectionX = fluidPos.getX() - (fluidPos.getX() & 15);
+            final int sectionY = fluidPos.getY() - (fluidPos.getY() & 15);
+            final int sectionZ = fluidPos.getZ() - (fluidPos.getZ() & 15);
+            poseStack.pushPose();
+            poseStack.translate(sectionX, sectionY, sectionZ);
+            collector.submitCustomGeometry(poseStack, renderType, (pose, buffer) -> fluidRenderer.tesselate(
+                fluidLevel,
+                fluidPos,
+                layer -> layer == sectionLayer ? new PoseVertexConsumer(pose, buffer) : null,
+                instance.state(),
+                instance.fluidState()));
+            poseStack.popPose();
+        }
+    }
+
+    private RenderType movingRenderType(final ChunkSectionLayer layer)
+    {
+        return switch (layer)
+        {
+            case SOLID -> RenderTypes.solidMovingBlock();
+            case CUTOUT -> RenderTypes.cutoutMovingBlock();
+            case TRANSLUCENT -> RenderTypes.translucentMovingBlock();
+        };
+    }
+
+    private void submitEntities(
+        final Minecraft minecraft,
+        final SubmitNodeCollector collector,
+        final PoseStack poseStack,
+        final long gameTime,
+        final float partialTicks,
+        final Map<Object, Exception> suppressedExceptions)
+    {
+        final EntityRenderDispatcher dispatcher = minecraft.getEntityRenderDispatcher();
+        for (final Entity entity : entities)
+        {
+            if (gameTime != lastGameTime && entity.getType().builtInRegistryHolder().is(ModTags.PREVIEW_TICKING_ENTITIES))
             {
                 try
                 {
                     entity.tick();
                 }
-                catch (final Exception e)
+                catch (final Exception exception)
                 {
-                    // well, noop
-                    suppressedExceptions.put(entity, e);
+                    suppressedExceptions.put(entity, exception);
                 }
             }
 
-            bypassMainFrustum |= entity.noCulling;
             try
             {
-                mc.getEntityRenderDispatcher()
-                  .render(entity,
-                    entity.getX(),
-                    entity.getY(),
-                    entity.getZ(),
-                    entity.getYRot(),
-                    partialTicks,
-                    matrixStack,
-                    renderBufferSource,
-                    mc.getEntityRenderDispatcher().getPackedLightCoords(entity, partialTicks));
+                final EntityRenderState state = dispatcher.extractEntity(entity, partialTicks);
+                dispatcher.submit(state, cameraState(minecraft), entity.getX(), entity.getY(), entity.getZ(), poseStack, collector);
             }
-            catch (final ClassCastException e)
+            catch (final ClassCastException | ReportedException exception)
             {
-                // Oops
-                suppressedExceptions.put(entity, e);
+                suppressedExceptions.put(entity, exception);
             }
         }
-        matrixStack.popPose();
+    }
 
-        mc.getProfiler().popPush("struct_render_entities_finish");
-        renderBufferSource.endLastBatch();
-        renderBufferSource.endBatch(RenderType.entitySolid(InventoryMenu.BLOCK_ATLAS));
-        renderBufferSource.endBatch(RenderType.entityCutout(InventoryMenu.BLOCK_ATLAS));
-        renderBufferSource.endBatch(RenderType.entityCutoutNoCull(InventoryMenu.BLOCK_ATLAS));
-        renderBufferSource.endBatch(RenderType.entitySmoothCutout(InventoryMenu.BLOCK_ATLAS));
-
-        // Block entities
-
-        mc.getProfiler().popPush("struct_render_blockentities");
+    private void submitBlockEntities(
+        final Minecraft minecraft,
+        final SubmitNodeCollector collector,
+        final PoseStack poseStack,
+        final BlockPos anchorPos,
+        final long gameTime,
+        final float partialTicks)
+    {
+        final BlockEntityRenderDispatcher dispatcher = minecraft.getBlockEntityRenderDispatcher();
+        dispatcher.prepare(Vec3.ZERO);
         for (final BlockEntity tileEntity : tileEntities)
         {
-            final BlockEntityRenderer<BlockEntity> renderer = mc.getBlockEntityRenderDispatcher().getRenderer(tileEntity);
-            if (renderer == null || !renderer.shouldRender(tileEntity, ourCamera.getPosition()))
+            tickPreviewBlockEntity(minecraft, anchorPos, tileEntity, gameTime);
+            final BlockEntityRenderState state = dispatcher.tryExtractRenderState(tileEntity, partialTicks, null, false);
+            if (state == null)
             {
                 continue;
             }
 
             final BlockPos tePos = tileEntity.getBlockPos();
-            final Vec3 realRenderTePos = realRenderRootVecd.add(tePos.getX(), tePos.getY(), tePos.getZ());
-
-            if (gameTime != lastGameTime)
-            {
-                // hooks from EntityBlock#getTicker(Level, BlockState, BlockEntityType) for client side
-                // either mc.level and anchorPos - particles, player distance etc.
-                // or blockAccess and tePos - blueprint neighborhood
-                if (tileEntity instanceof final SpawnerBlockEntity spawner)
-                {
-                    SpawnerBlockEntity.clientTick(mc.level, anchorPos.offset(tePos), blockAccess.getBlockState(tePos), spawner);
-                }
-                else if (tileEntity instanceof final EnchantmentTableBlockEntity enchTable)
-                {
-                    EnchantmentTableBlockEntity
-                        .bookAnimationTick(mc.level, anchorPos.offset(tePos), blockAccess.getBlockState(tePos), enchTable);
-                }
-                else if (tileEntity instanceof final CampfireBlockEntity campfire)
-                {
-                    final BlockState bs = blockAccess.getBlockState(tePos);
-                    if (bs.getBlock() instanceof CampfireBlock && bs.getValue(CampfireBlock.LIT))
-                    {
-                        CampfireBlockEntity.particleTick(mc.level, anchorPos.offset(tePos), bs, campfire);
-                    }
-                }
-                else if (tileEntity instanceof final SkullBlockEntity skull)
-                {
-                    final BlockState bs = blockAccess.getBlockState(tePos);
-                    if (bs.getBlock() instanceof SkullBlock && bs.is(Blocks.DRAGON_HEAD) || bs.is(Blocks.DRAGON_WALL_HEAD))
-                    {
-                        SkullBlockEntity.animation(blockAccess, tePos, bs, skull);
-                    }
-                }
-                else if (tileEntity instanceof final BeaconBlockEntity beacon)
-                {
-                    // uses sound and applies buffs, but we dont want any of this since we're preview
-                    BeaconBlockEntity.tick(blockAccess, tePos, blockAccess.getBlockState(tePos), beacon);
-                }
-            }
-
-            bypassMainFrustum |= renderer.shouldRenderOffScreen(tileEntity);
-            if (!blueprintLocalFrustum.isVisible(tileEntity.getRenderBoundingBox()) && !renderer.shouldRenderOffScreen(tileEntity))
-            {
-                continue;
-            }
-
-            matrixStack.pushPose();
-            matrixStack.translate(realRenderTePos.x, realRenderTePos.y, realRenderTePos.z);
-
-            mc.getBlockEntityRenderDispatcher().render(tileEntity, partialTicks, matrixStack, renderBufferSource);
-            matrixStack.popPose();
+            poseStack.pushPose();
+            poseStack.translate(tePos.getX(), tePos.getY(), tePos.getZ());
+            dispatcher.submit(state, poseStack, collector, cameraState(minecraft));
+            poseStack.popPose();
         }
-
-        mc.getProfiler().popPush("struct_render_blockentities_finish");
-        renderBufferSource.endBatch(RenderType.solid());
-        renderBufferSource.endBatch(RenderType.endPortal());
-        renderBufferSource.endBatch(RenderType.endGateway());
-        renderBufferSource.endBatch(Sheets.solidBlockSheet());
-        renderBufferSource.endBatch(Sheets.cutoutBlockSheet());
-        renderBufferSource.endBatch(Sheets.bedSheet());
-        renderBufferSource.endBatch(Sheets.shulkerBoxSheet());
-        renderBufferSource.endBatch(Sheets.signSheet());
-        renderBufferSource.endBatch(Sheets.hangingSignSheet());
-        renderBufferSource.endBatch(Sheets.chestSheet());
-        renderBuffers.outlineBufferSource().endOutlineBatch(); // not used now
-
-        renderBufferSource.endLastBatch();
-        renderBufferSource.endBatch(Sheets.translucentCullBlockSheet());
-        renderBufferSource.endBatch(Sheets.bannerSheet());
-        renderBufferSource.endBatch(Sheets.shieldSheet());
-        renderBufferSource.endBatch(RenderType.armorGlint());
-        renderBufferSource.endBatch(RenderType.armorEntityGlint());
-        renderBufferSource.endBatch(RenderType.glint());
-        renderBufferSource.endBatch(RenderType.glintDirect());
-        renderBufferSource.endBatch(RenderType.glintTranslucent());
-        renderBufferSource.endBatch(RenderType.entityGlint());
-        renderBufferSource.endBatch(RenderType.entityGlintDirect());
-        renderBufferSource.endBatch(RenderType.waterMask());
-        renderBuffers.crumblingBufferSource().endBatch(); // not used now
-
-        mc.getProfiler().popPush("struct_render_blocks2");
-        renderBlockLayer(RenderType.translucent(), mvMatrix, pMatrix, realRenderRootVecf, previewData);
-
-        renderBufferSource.endBatch(RenderType.lines());
-        renderBufferSource.endBatch();
-        renderBlockLayer(RenderType.tripwire(), mvMatrix, pMatrix, realRenderRootVecf, previewData);
-
-        RenderSystem.applyModelViewMatrix(); // ensure no polution
-        Lighting.setupLevel(matrixStack.last().pose());
-        if (ctx.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL)
-        {
-            FogRenderer.setupNoFog();
-        }
-
-        // restore vanilla setup
-        mc.getBlockEntityRenderDispatcher().prepare(dispLevel, dispCamera, beHitResult);
-        mc.getEntityRenderDispatcher().prepare(dispLevel, dispCamera, ePickEntity);
-
-        lastGameTime = gameTime;
-        mc.getProfiler().pop();
-
-        return suppressedExceptions;
     }
 
-    /**
-     * Clears GL references and frees GL objects.
-     */
-    private void clearVertexBuffers()
+    private CameraRenderState cameraState(final Minecraft minecraft)
     {
-        if (vertexBuffers != null)
+        final Camera camera = minecraft.gameRenderer.mainCamera();
+        final CameraRenderState state = new CameraRenderState();
+        state.initialized = true;
+        state.pos = camera.position();
+        state.blockPos = camera.blockPosition();
+        state.xRot = camera.xRot();
+        state.yRot = camera.yRot();
+        state.orientation.set(camera.rotation());
+        return state;
+    }
+
+    private void tickPreviewBlockEntity(
+        final Minecraft minecraft,
+        final BlockPos anchorPos,
+        final BlockEntity tileEntity,
+        final long gameTime)
+    {
+        if (gameTime == lastGameTime)
         {
-            vertexBuffers.values().forEach(VertexBuffer::close);
-            vertexBuffers = null;
+            return;
         }
+
+        final BlockPos tePos = tileEntity.getBlockPos();
+        final BlockState blockState = blockAccess.getBlockState(tePos);
+        if (tileEntity instanceof final SpawnerBlockEntity spawner)
+        {
+            SpawnerBlockEntity.clientTick(minecraft.level, anchorPos.offset(tePos), blockState, spawner);
+        }
+        else if (tileEntity instanceof final EnchantingTableBlockEntity enchantingTable)
+        {
+            EnchantingTableBlockEntity.bookAnimationTick(minecraft.level, anchorPos.offset(tePos), blockState, enchantingTable);
+        }
+        else if (tileEntity instanceof final CampfireBlockEntity campfire
+            && blockState.getBlock() instanceof CampfireBlock
+            && blockState.getValue(CampfireBlock.LIT))
+        {
+            CampfireBlockEntity.particleTick(minecraft.level, anchorPos.offset(tePos), blockState, campfire);
+        }
+        else if (tileEntity instanceof final SkullBlockEntity skull
+            && blockState.getBlock() instanceof SkullBlock
+            && (blockState.is(Blocks.DRAGON_HEAD) || blockState.is(Blocks.DRAGON_WALL_HEAD)))
+        {
+            SkullBlockEntity.animation(blockAccess, tePos, blockState, skull);
+        }
+        else if (tileEntity instanceof final BeaconBlockEntity beacon)
+        {
+            BeaconBlockEntity.tick(blockAccess, tePos, blockState, beacon);
+        }
+    }
+
+    private void clearCachedState()
+    {
+        entities.clear();
+        tileEntities.clear();
+        blockStates.clear();
+        fluidInstances.clear();
     }
 
     @Override
     public void close()
     {
-        clearVertexBuffers();
+        clearCachedState();
     }
 
-    private void renderBlockLayer(final RenderType layerRenderType, final Matrix4f mvMatrix, final Matrix4f pMatrix, final Vector3f realRenderRootPos, final BlueprintPreviewData previewData)
+    private record FluidInstance(BlockPos pos, BlockState state, FluidState fluidState)
     {
-        final VertexBuffer vertexBuffer = vertexBuffers.get(layerRenderType);
-        if (vertexBuffer == null)
-        {
-            return;
-        }
-
-        layerRenderType.setupRenderState();
-
-        final ShaderInstance shaderinstance = RenderSystem.getShader();
-
-        for (int k = 0; k < 12; ++k)
-        {
-            shaderinstance.setSampler("Sampler" + k, RenderSystem.getShaderTexture(k));
-        }
-
-        if (shaderinstance.MODEL_VIEW_MATRIX != null)
-        {
-            shaderinstance.MODEL_VIEW_MATRIX.set(mvMatrix);
-        }
-
-        if (shaderinstance.PROJECTION_MATRIX != null)
-        {
-            shaderinstance.PROJECTION_MATRIX.set(pMatrix);
-        }
-
-        if (shaderinstance.COLOR_MODULATOR != null)
-        {
-            shaderinstance.COLOR_MODULATOR.set(RenderSystem.getShaderColor());
-        }
-
-        if (shaderinstance.GLINT_ALPHA != null)
-        {
-            shaderinstance.GLINT_ALPHA.set(RenderSystem.getShaderGlintAlpha());
-        }
-
-        if (shaderinstance.FOG_START != null)
-        {
-            shaderinstance.FOG_START.set(RenderSystem.getShaderFogStart());
-        }
-
-        if (shaderinstance.FOG_END != null)
-        {
-            shaderinstance.FOG_END.set(RenderSystem.getShaderFogEnd());
-        }
-
-        if (shaderinstance.FOG_COLOR != null)
-        {
-            shaderinstance.FOG_COLOR.set(RenderSystem.getShaderFogColor());
-        }
-
-        if (shaderinstance.FOG_SHAPE != null)
-        {
-            shaderinstance.FOG_SHAPE.set(RenderSystem.getShaderFogShape().getIndex());
-        }
-
-        if (shaderinstance.TEXTURE_MATRIX != null)
-        {
-            shaderinstance.TEXTURE_MATRIX.set(RenderSystem.getTextureMatrix());
-        }
-
-        if (shaderinstance.GAME_TIME != null)
-        {
-            shaderinstance.GAME_TIME.set(RenderSystem.getShaderGameTime());
-        }
-
-        RenderSystem.setupShaderLights(shaderinstance);
-        shaderinstance.apply();
-
-        final Uniform uniform = shaderinstance.CHUNK_OFFSET;
-        if (uniform != null)
-        {
-            uniform.set(realRenderRootPos);
-            uniform.upload();
-        }
-
-        TransparencyHack.apply(previewData.getOverridePreviewTransparency());
-
-        vertexBuffer.bind();
-        vertexBuffer.draw();
-
-        TransparencyHack.reset();
-
-        if (uniform != null)
-        {
-            uniform.set(new Vector3f(0, 0, 0));
-        }
-
-        shaderinstance.clear();
-
-        VertexBuffer.unbind();
-        layerRenderType.clearRenderState();
     }
 
-    private static class OurChunkBufferBuilderPack extends ChunkBufferBuilderPack
+    private record PoseVertexConsumer(PoseStack.Pose pose, VertexConsumer delegate) implements VertexConsumer
     {
         @Override
-        public BufferBuilder builder(RenderType renderType)
+        public VertexConsumer addVertex(final float x, final float y, final float z)
         {
-            final BufferBuilder buffer = super.builder(renderType);
-            if (!buffer.building())
-            {
-                buffer.begin(renderType.mode(), renderType.format());
-            }
-            return buffer;
+            delegate.addVertex(pose.pose(), x, y, z);
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setColor(final int red, final int green, final int blue, final int alpha)
+        {
+            delegate.setColor(red, green, blue, alpha);
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setColor(final int color)
+        {
+            delegate.setColor(color);
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv(final float u, final float v)
+        {
+            delegate.setUv(u, v);
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv1(final int u, final int v)
+        {
+            delegate.setUv1(u, v);
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv2(final int u, final int v)
+        {
+            delegate.setUv2(u, v);
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setNormal(final float x, final float y, final float z)
+        {
+            delegate.setNormal(x, y, z);
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setLineWidth(final float width)
+        {
+            delegate.setLineWidth(width);
+            return this;
         }
     }
 
-    /**
-     * Assuming there's no blend function active let's take advantage of OpenGL blend color constant
-     * which doesnt require any shader changes at all.
-     * More info at: https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBlendColor.xhtml
-     */
-    public static class TransparencyHack
+    private final class BlueprintBlockTintGetter implements BlockAndTintGetter
     {
-        public static final float THRESHOLD = 0.99f;
-        protected static boolean applied = false;
-
-        public static void apply(final float overrideValue)
+        @Override
+        public net.minecraft.world.level.CardinalLighting cardinalLighting()
         {
-            if (applied || GlStateManager.BLEND.mode.enabled)
-            {
-                // do not override if there is running blend fnc
-                return;
-            }
-
-            float alpha = Structurize.getConfig().getClient().rendererTransparency.get().floatValue();
-            if (overrideValue != -1)
-            {
-                alpha = Mth.clamp(overrideValue, 0, 1);
-            }
-
-            if (alpha < 0 || alpha > THRESHOLD)
-            {
-                return;
-            }
-
-            applied = true;
-
-            RenderSystem.enableBlend();
-            RenderSystem.blendFunc(SourceFactor.CONSTANT_ALPHA, DestFactor.ONE_MINUS_CONSTANT_ALPHA);
-            GL20C.glBlendColor(0, 0, 0, alpha);
+            return Minecraft.getInstance().level.cardinalLighting();
         }
 
-        public static void reset()
+        @Override
+        public net.minecraft.world.level.lighting.LevelLightEngine getLightEngine()
         {
-            if (!applied)
-            {
-                return;
-            }
+            return blockAccess.getLightEngine();
+        }
 
-            applied = false;
+        @Override
+        public int getBlockTint(final BlockPos pos, final ColorResolver color)
+        {
+            final ClientLevel level = Minecraft.getInstance().level;
+            return level == null ? -1 : color.getColor(
+                level.getBiome(blockAccess.getWorldPos().offset(pos)).value(), pos.getX(), pos.getZ());
+        }
 
-            RenderSystem.disableBlend();
+        @Override
+        public BlockEntity getBlockEntity(final BlockPos pos)
+        {
+            return blockAccess.getBlockEntity(pos);
+        }
+
+        @Override
+        public BlockState getBlockState(final BlockPos pos)
+        {
+            return blockAccess.getBlockState(pos);
+        }
+
+        @Override
+        public FluidState getFluidState(final BlockPos pos)
+        {
+            return blockAccess.getFluidState(pos);
+        }
+
+        @Override
+        public int getHeight()
+        {
+            return blockAccess.getHeight();
+        }
+
+        @Override
+        public int getMinY()
+        {
+            return blockAccess.getMinY();
+        }
+
+        @Override
+        public ModelData getModelData(final BlockPos pos)
+        {
+            return ModelData.EMPTY;
         }
     }
 }

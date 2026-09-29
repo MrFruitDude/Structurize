@@ -9,10 +9,10 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.forgespi.language.IModInfo;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModList;
+import net.neoforged.neoforgespi.language.IModInfo;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -69,7 +69,13 @@ public class ServerStructurePackLoader
         final List<String> modList = new ArrayList<>();
         for (IModInfo mod : ModList.get().getMods())
         {
-            modPaths.add(mod.getOwningFile().getFile().findResource(BLUEPRINT_FOLDER, mod.getModId()));
+            // findFile only resolves regular files. Built-in structure packs
+            // are directories, so resolve them from the content roots instead.
+            modPaths.add(mod.getOwningFile().getFile().getContents().getContentRoots().stream()
+                .map(root -> root.resolve(BLUEPRINT_FOLDER).resolve(mod.getModId()))
+                .filter(Files::isDirectory)
+                .findFirst()
+                .orElse(null));
             modList.add(mod.getModId());
         }
 
@@ -80,13 +86,19 @@ public class ServerStructurePackLoader
             try
             {
                 // This loads from the jar
-                for (final Path modPath : modPaths)
+                for (int index = 0; index < modPaths.size(); index++)
                 {
+                    final Path modPath = modPaths.get(index);
+                    if (modPath == null || !Files.isDirectory(modPath))
+                    {
+                        continue;
+                    }
+                    final String owner = modList.get(index);
                     try
                     {
                         try (final Stream<Path> paths = Files.list(modPath))
                         {
-                            paths.forEach(element -> StructurePacks.discoverPackAtPath(element, true, modList, false, modPath.toString().split("/")[1]));
+                            paths.forEach(element -> StructurePacks.discoverPackAtPath(element, true, modList, false, owner));
                         }
                     }
                     catch (IOException e)
@@ -180,27 +192,27 @@ public class ServerStructurePackLoader
     }
 
     @SubscribeEvent
-    public static void onWorldTick(final TickEvent.ServerTickEvent event)
+    public static void onWorldTick(final ServerTickEvent.Post event)
     {
-        if (event.phase == TickEvent.Phase.END)
+        if (event.getServer().getTickCount() % 20 == 0 && loadingState == ServerLoadingState.FINISHED_LOADING && !clientSyncRequests.isEmpty())
         {
-            if (event.getServer().getTickCount() % 20 == 0 && loadingState == ServerLoadingState.FINISHED_LOADING && !clientSyncRequests.isEmpty())
+            loadingState = ServerLoadingState.FINISHED_SYNCING;
+            for (final Map.Entry<UUID, Map<String, Double>> entry : clientSyncRequests.entrySet())
             {
-                loadingState = ServerLoadingState.FINISHED_SYNCING;
-                for (final Map.Entry<UUID, Map<String, Double>> entry : clientSyncRequests.entrySet())
+                final ServerPlayer player = event.getServer().getPlayerList().getPlayer(entry.getKey());
+                if (player != null)
                 {
-                    final ServerPlayer player = event.getServer().getPlayerList().getPlayer(entry.getKey());
-                    if (player != null)
-                    {
-                        handleClientUpdate(entry.getValue(), player);
-                    }
+                    handleClientUpdate(entry.getValue(), player);
                 }
-                clientSyncRequests.clear();
             }
+            clientSyncRequests.clear();
+        }
 
-            if (!messageSendTasks.isEmpty())
+        if (!messageSendTasks.isEmpty())
+        {
+            final PackagedPack packData = messageSendTasks.poll();
+            if (packData != null)
             {
-                final PackagedPack packData = messageSendTasks.poll();
                 final ServerPlayer player = event.getServer().getPlayerList().getPlayer(packData.player);
                 // If the player logged off, we can just skip.
                 if (player != null)

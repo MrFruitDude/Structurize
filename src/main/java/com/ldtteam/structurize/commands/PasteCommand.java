@@ -10,7 +10,7 @@ import com.ldtteam.structurize.placement.structure.IStructureHandler;
 import com.ldtteam.structurize.storage.StructurePacks;
 import com.ldtteam.structurize.util.PlacementSettings;
 import com.ldtteam.structurize.util.RotationMirror;
-import com.mojang.authlib.GameProfile;
+import net.minecraft.server.players.NameAndId;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -235,7 +235,7 @@ public class PasteCommand extends AbstractCommand
         final Rotation rotation = Rotation.values()[IntegerArgumentType.getInteger(context, ROTATION)];
         final boolean mirror = BoolArgumentType.getBool(context, MIRROR);
         final boolean pretty = BoolArgumentType.getBool(context, PRETTY);
-        final GameProfile profile = GameProfileArgument.getGameProfiles(context, PLAYER_NAME).stream().findFirst().orElse(null);
+        final NameAndId profile = GameProfileArgument.getGameProfiles(context, PLAYER_NAME).stream().findFirst().orElse(null);
 
         if (profile == null)
         {
@@ -243,7 +243,7 @@ public class PasteCommand extends AbstractCommand
             return 0;
         }
 
-        return execute(context.getSource(), pos, packName, path, rotation, mirror, pretty, context.getSource().getLevel().getServer().getPlayerList().getPlayer(profile.getId()));
+        return execute(context.getSource(), pos, packName, path, rotation, mirror, pretty, context.getSource().getLevel().getServer().getPlayerList().getPlayer(profile.id()));
     }
 
     protected static LiteralArgumentBuilder<CommandSourceStack> build()

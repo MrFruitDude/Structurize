@@ -3,7 +3,7 @@ package com.ldtteam.structurize.tag;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Block;
@@ -31,6 +31,6 @@ public class ModTags
 
     private static <T> TagKey<T> modTag(final ResourceKey<Registry<T>> registry, @NotNull final String name)
     {
-        return TagKey.create(registry, new ResourceLocation(MOD_ID, name));
+        return TagKey.create(registry, Identifier.fromNamespaceAndPath(MOD_ID, name));
     }
 }

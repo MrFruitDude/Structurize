@@ -5,8 +5,8 @@ import com.ldtteam.structurize.items.ItemScanTool;
 import com.ldtteam.structurize.util.ScanToolData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.fml.LogicalSide;
+import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
@@ -66,8 +66,8 @@ public class ScanOnServerMessage implements IMessage
     }
 
     @Override
-    public void onExecute(final NetworkEvent.Context ctxIn, final boolean isLogicalServer)
+    public void onExecute(final NetworkContext ctxIn, final boolean isLogicalServer)
     {
-        ItemScanTool.saveStructure(ctxIn.getSender().getCommandSenderWorld(), ctxIn.getSender(), this.slot, saveEntities);
+        ItemScanTool.saveStructure(ctxIn.getSender().level(), ctxIn.getSender(), this.slot, saveEntities);
     }
 }

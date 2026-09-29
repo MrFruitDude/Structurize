@@ -6,10 +6,10 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.MultiBufferSource.BufferSource;
+import com.ldtteam.structurize.client.rendertask.util.BufferSourceCompat;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
  * Main class for handling world rendering.
@@ -25,7 +25,7 @@ public class WorldEventRenderContext
     }
 
     public RenderLevelStageEvent stageEvent;
-    public BufferSource          bufferSource;
+    public BufferSourceCompat     bufferSource;
     public PoseStack             poseStack;
     public float                 partialTicks;
     public ClientLevel           clientLevel;
@@ -37,18 +37,23 @@ public class WorldEventRenderContext
      */
     int clientRenderDist;
 
+    public boolean isStage(final Class<? extends RenderLevelStageEvent> stageType)
+    {
+        return stageType.isInstance(stageEvent);
+    }
+
     public void renderWorldLastEvent(final RenderLevelStageEvent event)
     {
         stageEvent = event;
         bufferSource = WorldRenderMacros.getBufferSource();
         poseStack = event.getPoseStack();
-        partialTicks = event.getPartialTick();
+        partialTicks = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
         clientLevel = Minecraft.getInstance().level;
         clientPlayer = Minecraft.getInstance().player;
         mainHandItem = clientPlayer.getMainHandItem();
         clientRenderDist = Minecraft.getInstance().options.renderDistance().get();
 
-        final Vec3 cameraPos = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        final Vec3 cameraPos = Minecraft.getInstance().gameRenderer.mainCamera().position();
         poseStack.pushPose();
         poseStack.translate(-cameraPos.x(), -cameraPos.y(), -cameraPos.z());
 

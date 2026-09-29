@@ -2,7 +2,7 @@ package com.ldtteam.structurize.config;
 
 import com.google.common.collect.Lists;
 import net.minecraft.core.Direction;
-import net.minecraftforge.common.ForgeConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.util.List;
 
@@ -17,55 +17,55 @@ public class ServerConfiguration extends AbstractConfiguration
     /**
      * Should the default schematics be ignored (from the jar)?
      */
-    public final ForgeConfigSpec.BooleanValue ignoreSchematicsFromJar;
+    public final ModConfigSpec.BooleanValue ignoreSchematicsFromJar;
 
     /**
      * Should player made schematics be allowed
      */
-    public final ForgeConfigSpec.BooleanValue allowPlayerSchematics;
+    public final ModConfigSpec.BooleanValue allowPlayerSchematics;
 
     /**
      * Max world operations per tick (Max blocks to place, remove or replace)
      */
-    public final ForgeConfigSpec.IntValue maxOperationsPerTick;
+    public final ModConfigSpec.IntValue maxOperationsPerTick;
 
     /**
      * Max amount of changes cached to be able to undo
      */
-    public final ForgeConfigSpec.IntValue maxCachedChanges;
+    public final ModConfigSpec.IntValue maxCachedChanges;
 
     /**
      * Max amount of schematics to be cached on the server
      */
-    public final ForgeConfigSpec.IntValue maxCachedSchematics;
+    public final ModConfigSpec.IntValue maxCachedSchematics;
 
     /**
      * Max amount of blocks checked by a possible worker.
      */
-    public final ForgeConfigSpec.IntValue maxBlocksChecked;
+    public final ModConfigSpec.IntValue maxBlocksChecked;
 
     /**
      * Max amount of blocks checked by a possible worker.
      */
-    public final ForgeConfigSpec.IntValue schematicBlockLimit;
+    public final ModConfigSpec.IntValue schematicBlockLimit;
 
-    public final ForgeConfigSpec.ConfigValue<String> iteratorType;
+    public final ModConfigSpec.ConfigValue<String> iteratorType;
 
-    public final ForgeConfigSpec.ConfigValue<List<Integer>> updateStartPos;
+    public final ModConfigSpec.ConfigValue<List<Integer>> updateStartPos;
 
-    public final ForgeConfigSpec.ConfigValue<List<Integer>> updateEndPos;
+    public final ModConfigSpec.ConfigValue<List<Integer>> updateEndPos;
 
-    public final ForgeConfigSpec.BooleanValue teleportAllowed;
-    public final ForgeConfigSpec.EnumValue<Direction> teleportBuildDirection;
-    public final ForgeConfigSpec.IntValue teleportBuildDistance;
-    public final ForgeConfigSpec.BooleanValue teleportSafety;
+    public final ModConfigSpec.BooleanValue teleportAllowed;
+    public final ModConfigSpec.EnumValue<Direction> teleportBuildDirection;
+    public final ModConfigSpec.IntValue teleportBuildDistance;
+    public final ModConfigSpec.BooleanValue teleportSafety;
 
     /**
      * Builds server configuration.
      *
      * @param builder config builder
      */
-    protected ServerConfiguration(final ForgeConfigSpec.Builder builder)
+    protected ServerConfiguration(final ModConfigSpec.Builder builder)
     {
         createCategory(builder, "gameplay");
 

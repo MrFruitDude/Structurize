@@ -11,6 +11,7 @@ import com.ldtteam.structurize.client.gui.util.ItemUtil;
 import com.ldtteam.structurize.network.messages.ReplaceBlockMessage;
 import com.ldtteam.structurize.util.BlockUtils;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.AirItem;
 import net.minecraft.world.item.ItemStack;
@@ -69,17 +70,17 @@ public class WindowReplaceBlock extends WindowSelectRes
                 missingProperties.removeAll(fromBS.getProperties());
                 if (!missingProperties.isEmpty())
                 {
-                    Minecraft.getInstance().player.displayClientMessage(Component.translatable("structurize.gui.replaceblock.ambiguous_properties",
+                    Minecraft.getInstance().player.sendSystemMessage(Component.translatable("structurize.gui.replaceblock.ambiguous_properties",
                         fromBS.getBlock().getName(),
                         toBS.getBlock().getName(),
                         missingProperties.stream()
                             .map(prop -> getPropertyName(prop) + " - " + prop.getName())
-                            .collect(Collectors.joining(", ", "[", "]"))), false);
+                            .collect(Collectors.joining(", ", "[", "]"))));
                 }
                 if (toBS.is(ModBlocks.NULL_PLACEMENT))
                 {
-                    Minecraft.getInstance().player.displayClientMessage(Component.translatable("structurize.gui.replaceblock.null_placement",
-                        toBS.getBlock().getName()), false);
+                    Minecraft.getInstance().player.sendSystemMessage(Component.translatable("structurize.gui.replaceblock.null_placement",
+                        toBS.getBlock().getName()));
                 }
 
                 final String pct = findPaneOfTypeByID("count", TextField.class).getText();
@@ -91,7 +92,7 @@ public class WindowReplaceBlock extends WindowSelectRes
                 catch (NumberFormatException ex)
                 {
                     pctNum = 100;
-                    Minecraft.getInstance().player.displayClientMessage(Component.translatable("structurize.gui.replaceblock.badpct"), false);
+                    Minecraft.getInstance().player.sendSystemMessage(Component.translatable("structurize.gui.replaceblock.badpct"));
                 }
 
                 Network.getNetwork().sendToServer(new ReplaceBlockMessage(toReplace, to, pctNum));
@@ -106,7 +107,7 @@ public class WindowReplaceBlock extends WindowSelectRes
         return clazz instanceof BooleanProperty ? "Boolean"
             : clazz instanceof IntegerProperty ? "Integer"
                 : clazz instanceof EnumProperty ? "Enum"
-                    : clazz instanceof DirectionProperty ? "Direction"
-                        : clazz.getClass().getSimpleName();
+            : clazz.getValueClass() == Direction.class ? "Direction"
+                : clazz.getClass().getSimpleName();
     }
 }

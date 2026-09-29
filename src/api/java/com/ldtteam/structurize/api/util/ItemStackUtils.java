@@ -1,15 +1,22 @@
 package com.ldtteam.structurize.api.util;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.vehicle.ContainerEntity;
-import net.minecraft.world.entity.vehicle.MinecartChest;
+import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -17,9 +24,12 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import net.minecraftforge.items.IItemHandler;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import com.mojang.serialization.DynamicOps;
+import com.ldtteam.structurize.api.util.Log;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -31,6 +41,9 @@ import java.util.stream.Collectors;
  */
 public final class ItemStackUtils
 {
+    private static final HolderLookup.Provider STATIC_REGISTRIES =
+        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+
     /**
      * Private constructor to hide the implicit one.
      */
@@ -59,8 +72,12 @@ public final class ItemStackUtils
             return getItemStacksFromNbt(compound);
         }
 
-        BlockPos blockpos = new BlockPos(compound.getInt("x"), compound.getInt("y"), compound.getInt("z"));
-        final BlockEntity tileEntity = BlockEntity.loadStatic(blockpos, state, compound);
+        BlockPos blockpos = new BlockPos(
+            compound.getIntOr("x", 0),
+            compound.getIntOr("y", 0),
+            compound.getIntOr("z", 0)
+        );
+        final BlockEntity tileEntity = BlockEntity.loadStatic(blockpos, state, compound, STATIC_REGISTRIES);
         if (tileEntity == null)
         {
             return Collections.emptyList();
@@ -86,12 +103,15 @@ public final class ItemStackUtils
     private static List<ItemStack> getItemStacksFromNbt(@NotNull final CompoundTag compound)
     {
         final List<ItemStack> items = new ArrayList<>();
-        final ListTag listtag = compound.getList("Items", Tag.TAG_COMPOUND);
+        final ListTag listtag = compound.getListOrEmpty("Items");
 
         for (int i = 0; i < listtag.size(); ++i)
         {
-            final CompoundTag compoundtag = listtag.getCompound(i);
-            final ItemStack stack = ItemStack.of(compoundtag);
+            final CompoundTag compoundtag = listtag.getCompoundOrEmpty(i);
+            final DynamicOps<Tag> ops = STATIC_REGISTRIES.createSerializationContext(NbtOps.INSTANCE);
+            final ItemStack stack = ItemStack.CODEC.parse(ops, compoundtag)
+                .resultOrPartial(error -> { throw new IllegalArgumentException("Invalid item stack NBT: " + error); })
+                .orElse(ItemStack.EMPTY);
             if (!stack.isEmpty())
             {
                 items.add(stack);
@@ -102,20 +122,80 @@ public final class ItemStackUtils
     }
 
     /**
+     * Parses an item stack from pre-26 NBT using the built-in registries.
+     */
+    @NotNull
+    public static ItemStack getItemStackFromNbt(@NotNull final CompoundTag compound)
+    {
+        if (compound.isEmpty())
+        {
+            return ItemStack.EMPTY;
+        }
+
+        return ItemStack.CODEC.parse(STATIC_REGISTRIES.createSerializationContext(NbtOps.INSTANCE), compound)
+            .resultOrPartial(error -> Log.getLogger().warn("Invalid item stack NBT: {}", error))
+            .orElse(ItemStack.EMPTY);
+    }
+
+    /**
+     * Writes an item stack using the pre-26 compound representation.
+     */
+    @NotNull
+    public static CompoundTag writeToNbt(@NotNull final ItemStack stack)
+    {
+        if (stack.isEmpty())
+        {
+            return new CompoundTag();
+        }
+
+        return ItemStack.CODEC.encodeStart(
+                STATIC_REGISTRIES.createSerializationContext(NbtOps.INSTANCE), stack)
+            .resultOrPartial(error -> Log.getLogger().warn("Failed to encode item stack: {}", error))
+            .map(tag -> tag instanceof CompoundTag compound ? compound : new CompoundTag())
+            .orElseGet(CompoundTag::new);
+    }
+
+    /**
      * Method to get all the IItemHandlers from a given Provider.
      *
      * @param provider The provider to get the IItemHandlers from.
      * @return A list with all the unique IItemHandlers a provider has.
      */
-    public static Set<IItemHandler> getItemHandlersFromProvider(final ICapabilityProvider provider)
+    public static Set<IItemHandler> getItemHandlersFromProvider(final Object provider)
     {
         final Set<IItemHandler> handlerSet = new HashSet<>();
-        for (final Direction side : Direction.values())
+        if (provider instanceof final BlockEntity blockEntity && blockEntity.getLevel() != null)
         {
-           provider.getCapability(ForgeCapabilities.ITEM_HANDLER, side).ifPresent(handlerSet::add);
+            for (final Direction side : Direction.values())
+            {
+                addBlockHandler(handlerSet, blockEntity, side);
+            }
+            addBlockHandler(handlerSet, blockEntity, null);
         }
-        provider.getCapability(ForgeCapabilities.ITEM_HANDLER, null).ifPresent(handlerSet::add);
+        else if (provider instanceof final Entity entity)
+        {
+            final ResourceHandler<ItemResource> handler = Capabilities.Item.ENTITY.getCapability(entity, null);
+            if (handler != null)
+            {
+                handlerSet.add(IItemHandler.of(handler));
+            }
+        }
         return handlerSet;
+    }
+
+    private static void addBlockHandler(
+        final Set<IItemHandler> handlers,
+        final BlockEntity blockEntity,
+        @Nullable final Direction side
+    )
+    {
+        final ResourceHandler<ItemResource> handler = Capabilities.Item.BLOCK.getCapability(
+            blockEntity.getLevel(), blockEntity.getBlockPos(), blockEntity.getBlockState(), blockEntity, side
+        );
+        if (handler != null)
+        {
+            handlers.add(IItemHandler.of(handler));
+        }
     }
 
     /**
@@ -171,25 +251,18 @@ public final class ItemStackUtils
             }
             else if (entity instanceof ArmorStand)
             {
-                request.add(entity.getPickedResult(new HitResult(Vec3.atLowerCornerOf(pos)) {
-                    @Override
-                    public Type getType()
+                addIfPresent(request, entity.getPickResult());
+                if (entity instanceof final LivingEntity livingEntity)
+                {
+                    for (final EquipmentSlot slot : EquipmentSlot.VALUES)
                     {
-                        return Type.ENTITY;
+                        addIfPresent(request, livingEntity.getItemBySlot(slot));
                     }
-                }));
-                entity.getArmorSlots().forEach(request::add);
-                entity.getHandSlots().forEach(request::add);
+                }
             }
             else if (entity instanceof ContainerEntity containerEntity)
             {
-                request.add(entity.getPickedResult(new HitResult(Vec3.atLowerCornerOf(pos)) {
-                    @Override
-                    public Type getType()
-                    {
-                        return Type.ENTITY;
-                    }
-                }));
+                addIfPresent(request, entity.getPickResult());
                 request.addAll(containerEntity.getItemStacks());
             }
 
@@ -264,32 +337,28 @@ public final class ItemStackUtils
                 return false;
             }
 
-            // Then sort on NBT
-            if (itemStack1.hasTag() && itemStack2.hasTag())
+            // Data components replace the legacy item NBT map.
+            if (matchNBT)
             {
-                CompoundTag nbt1 = itemStack1.getTag();
-                CompoundTag nbt2 = itemStack2.getTag();
-
-                for(String key :nbt1.getAllKeys())
-                {
-                    if(!matchDamage && key.equals("Damage"))
-                    {
-                        continue;
-                    }
-                    if(!nbt2.contains(key) || !nbt1.get(key).equals(nbt2.get(key)))
-                    {
-                        return false;
-                    }
-                }
-
-                return nbt1.getAllKeys().size() == nbt2.getAllKeys().size();
+                return ItemStack.matchesIgnoringComponents(
+                    itemStack1.copyWithCount(itemStack2.getCount()),
+                    itemStack2,
+                    type -> !matchDamage && type == DataComponents.DAMAGE
+                );
             }
             else
             {
-                return (!itemStack1.hasTag() || itemStack1.getTag().isEmpty())
-                         && (!itemStack2.hasTag() || itemStack2.getTag().isEmpty());
+                return true;
             }
         }
         return false;
+    }
+
+    private static void addIfPresent(final List<ItemStack> stacks, @Nullable final ItemStack stack)
+    {
+        if (stack != null && !stack.isEmpty())
+        {
+            stacks.add(stack);
+        }
     }
 }

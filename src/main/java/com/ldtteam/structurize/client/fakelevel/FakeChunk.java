@@ -15,7 +15,7 @@ import net.minecraft.world.level.biome.Climate.Sampler;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -27,10 +27,6 @@ import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.ticks.BlackholeTickAccess;
 import net.minecraft.world.ticks.TickContainerAccess;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.CapabilityDispatcher;
-import net.minecraftforge.common.capabilities.CapabilityProvider;
-import net.minecraftforge.common.util.LazyOptional;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.util.Collection;
@@ -89,7 +85,6 @@ public class FakeChunk extends LevelChunk
         return fakeLevel.getBlockEntity(pos);
     }
 
-    @Override
     @Nullable
     public BlockEntity getExistingBlockEntity(BlockPos pos)
     {
@@ -142,7 +137,7 @@ public class FakeChunk extends LevelChunk
     }
 
     @Override
-    public ChunkStatus getStatus()
+    public ChunkStatus getPersistedStatus()
     {
         return ChunkStatus.FULL;
     }
@@ -199,17 +194,17 @@ public class FakeChunk extends LevelChunk
     // ========================================
 
     @Override
-    public void findBlocks(BiPredicate<BlockState, BlockPos> predicate, BiConsumer<BlockPos, BlockState> sink)
+    public void findBlocks(java.util.function.Predicate<BlockState> predicate, BiConsumer<BlockPos, BlockState> sink)
     {
         for (final BlockPos mutablePos : BlockPos.betweenClosed(chunkPos.getBlockX(0),
             fakeLevel.levelSource.getMinBuildHeight(),
             chunkPos.getBlockZ(0),
             Math.min(chunkPos.getBlockX(15), fakeLevel.levelSource.getMaxX() - 1),
-            fakeLevel.levelSource.getMaxBuildHeight() - 1,
+            fakeLevel.levelSource.getMaxY() - 1,
             Math.min(chunkPos.getBlockZ(15), fakeLevel.levelSource.getMaxZ() - 1)))
         {
             final BlockState blockState = getBlockState(mutablePos);
-            if (predicate.test(blockState, mutablePos))
+            if (predicate.test(blockState))
             {
                 sink.accept(mutablePos, blockState);
             }
@@ -250,35 +245,8 @@ public class FakeChunk extends LevelChunk
     }
 
     @Override
-    public boolean areCapsCompatible(CapabilityProvider<LevelChunk> other)
-    {
-        // Noop
-        return false;
-    }
-
-    @Override
-    public boolean areCapsCompatible(@Nullable CapabilityDispatcher other)
-    {
-        // Noop
-        return false;
-    }
-
-    @Override
-    public <T> @NotNull LazyOptional<T> getCapability(@NotNull Capability<T> cap, @Nullable Direction side)
-    {
-        // Noop
-        return LazyOptional.empty();
-    }
-
-    @Override
-    public void invalidateCaps()
-    {
-        // Noop
-    }
-
-    @Override
     @javax.annotation.Nullable
-    public CompoundTag getBlockEntityNbtForSaving(BlockPos p_62932_)
+    public CompoundTag getBlockEntityNbtForSaving(BlockPos position, net.minecraft.core.HolderLookup.Provider provider)
     {
         // Noop
         return null;
@@ -299,7 +267,7 @@ public class FakeChunk extends LevelChunk
     }
 
     @Override
-    public void postProcessGeneration()
+    public void postProcessGeneration(net.minecraft.server.level.ServerLevel level)
     {
         // Noop
     }
@@ -323,13 +291,10 @@ public class FakeChunk extends LevelChunk
     }
 
     @Override
-    public void replaceWithPacketData(FriendlyByteBuf p_187972_, CompoundTag p_187973_, Consumer<BlockEntityTagOutput> p_187974_)
-    {
-        // Noop
-    }
-
-    @Override
-    public void reviveCaps()
+    public void replaceWithPacketData(
+        FriendlyByteBuf buffer,
+        Map<Types, long[]> heightmaps,
+        Consumer<BlockEntityTagOutput> output)
     {
         // Noop
     }
@@ -342,7 +307,7 @@ public class FakeChunk extends LevelChunk
 
     @Override
     @javax.annotation.Nullable
-    public BlockState setBlockState(BlockPos p_62865_, BlockState p_62866_, boolean p_62867_)
+    public BlockState setBlockState(BlockPos position, BlockState state, int updateFlags)
     {
         // Noop
         return null;
@@ -361,7 +326,7 @@ public class FakeChunk extends LevelChunk
     }
 
     @Override
-    public void addPackedPostProcess(short p_62092_, int p_62093_)
+    public void addPackedPostProcess(it.unimi.dsi.fastutil.shorts.ShortList packedPositions, int index)
     {
         // Noop
     }
@@ -399,12 +364,6 @@ public class FakeChunk extends LevelChunk
     }
 
     @Override
-    public void setBlendingData(BlendingData p_187646_)
-    {
-        // Noop
-    }
-
-    @Override
     public void setBlockEntityNbt(CompoundTag p_62091_)
     {
         // Noop
@@ -420,19 +379,6 @@ public class FakeChunk extends LevelChunk
     public void setStartForStructure(Structure p_223010_, StructureStart p_223011_)
     {
         // Noop
-    }
-
-    @Override
-    public void setUnsaved(boolean p_62094_)
-    {
-        // Noop
-    }
-
-    @Override
-    public <T> @NotNull LazyOptional<T> getCapability(@NotNull Capability<T> cap)
-    {
-        // Noop
-        return LazyOptional.empty();
     }
 
     @Override
