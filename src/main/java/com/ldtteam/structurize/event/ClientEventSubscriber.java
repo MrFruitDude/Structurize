@@ -214,22 +214,37 @@ public class ClientEventSubscriber
             if (current.getItem() instanceof ISpecialBlockPickItem clickableItem)
             {
                 final boolean ctrlKey = mc.hasControlDown();
-                    final InteractionResult pickResult = clickableItem.onBlockPick(mc.player, current, pos, ctrlKey);
-                    if (pickResult == InteractionResult.PASS)
-                    {
-                        KeyMapping.click(mc.options.keyPickItem.getKey());
-                    }
-                    else if (pickResult != InteractionResult.FAIL)
-                    {
-                        KeyMapping.click(mc.options.keyPickItem.getKey());
-                        Network.getNetwork().sendToServer(new ItemMiddleMouseMessage(pos, ctrlKey));
-                    }
+                final InteractionResult pickResult = clickableItem.onBlockPick(mc.player, current, pos, ctrlKey);
+                if (runsVanillaPick(pickResult))
+                {
+                    KeyMapping.click(mc.options.keyPickItem.getKey());
+                }
+                else if (sendsPickToServer(pickResult))
+                {
+                    Network.getNetwork().sendToServer(new ItemMiddleMouseMessage(pos, ctrlKey));
+                }
             }
             else
             {
                 KeyMapping.click(mc.options.keyPickItem.getKey());
             }
         }
+    }
+
+    /**
+     * Only PASS hands the click back to vanilla pick-block (see {@link ISpecialBlockPickItem#onBlockPick}).
+     */
+    static boolean runsVanillaPick(final InteractionResult pickResult)
+    {
+        return pickResult == InteractionResult.PASS;
+    }
+
+    /**
+     * Anything other than PASS or FAIL is the tool's own action, sent to the server instead of vanilla pick-block.
+     */
+    static boolean sendsPickToServer(final InteractionResult pickResult)
+    {
+        return pickResult != InteractionResult.PASS && pickResult != InteractionResult.FAIL;
     }
 
     @SubscribeEvent
