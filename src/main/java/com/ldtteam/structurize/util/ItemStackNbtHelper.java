@@ -10,6 +10,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.function.Consumer;
+
 /**
  * Compatibility boundary between Structurize's persisted item tags and Minecraft's data components.
  */
@@ -31,11 +33,21 @@ public final class ItemStackNbtHelper
         return customData == null ? null : customData.copyTag();
     }
 
-    public static CompoundTag getOrCreateCustomTag(final ItemStack stack)
+    /**
+     * Read-only snapshot of the stack's custom data (empty tag if none). Writes to the returned tag are NOT stored on the stack:
+     * item components are immutable, so use {@link #updateCustomTag} to change them.
+     */
+    public static CompoundTag copyCustomTag(final ItemStack stack)
     {
-        final CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
-        CustomData.set(DataComponents.CUSTOM_DATA, stack, tag);
-        return tag;
+        return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+    }
+
+    /**
+     * Applies {@code writer} to a copy of the stack's custom data and stores the result back on the stack.
+     */
+    public static void updateCustomTag(final ItemStack stack, final Consumer<CompoundTag> writer)
+    {
+        CustomData.update(DataComponents.CUSTOM_DATA, stack, writer);
     }
 
     public static void setCustomTag(final ItemStack stack, final CompoundTag tag)

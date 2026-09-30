@@ -58,7 +58,7 @@ public class UpdateScanToolMessage implements IMessage
         if (stack.getItem() instanceof ItemScanTool tool)
         {
             ItemStackNbtHelper.setCustomTag(stack, this.tag);
-            tool.loadSlot(new ScanToolData(ItemStackNbtHelper.getOrCreateCustomTag(stack)), stack);
+            tool.loadSlot(new ScanToolData(ItemStackNbtHelper.copyCustomTag(stack)), stack);
         }
     }
 }

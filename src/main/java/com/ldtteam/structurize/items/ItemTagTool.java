@@ -81,7 +81,7 @@ public class ItemTagTool extends AbstractItemWithPosSelector
      */
     private BlockPos getAnchorPos(final ItemStack stack)
     {
-        final CompoundTag itemCompound = ItemStackNbtHelper.getOrCreateCustomTag(stack);
+        final CompoundTag itemCompound = ItemStackNbtHelper.copyCustomTag(stack);
 
         if (itemCompound.contains(TAG_ANCHOR_POS))
         {
@@ -99,11 +99,7 @@ public class ItemTagTool extends AbstractItemWithPosSelector
      */
     private String getCurrentTag(final ItemStack stack)
     {
-        if (ItemStackNbtHelper.getOrCreateCustomTag(stack).contains(TAG_CURRENT_TAG))
-        {
-            return ItemStackNbtHelper.getOrCreateCustomTag(stack).getStringOr(TAG_CURRENT_TAG, "");
-        }
-        return "";
+        return ItemStackNbtHelper.copyCustomTag(stack).getStringOr(TAG_CURRENT_TAG, "");
     }
 
     @Override
@@ -134,7 +130,7 @@ public class ItemTagTool extends AbstractItemWithPosSelector
             BlockEntity te = context.getLevel().getBlockEntity(context.getClickedPos());
             if (te instanceof IBlueprintDataProviderBE)
             {
-                BlockPosUtil.writeToNBT(ItemStackNbtHelper.getOrCreateCustomTag(context.getItemInHand()), TAG_ANCHOR_POS, context.getClickedPos());
+                ItemStackNbtHelper.updateCustomTag(context.getItemInHand(), tag -> BlockPosUtil.writeToNBT(tag, TAG_ANCHOR_POS, context.getClickedPos()));
                 if (context.getLevel().isClientSide())
                 {
                     context.getPlayer().sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.anchorsaved"));
@@ -194,7 +190,7 @@ public class ItemTagTool extends AbstractItemWithPosSelector
         if (!(te instanceof IBlueprintDataProviderBE))
         {
             player.sendSystemMessage(Component.translatable("com.ldtteam.structurize.gui.tagtool.anchor.notvalid"));
-            ItemStackNbtHelper.getOrCreateCustomTag(stack).remove(TAG_ANCHOR_POS);
+            ItemStackNbtHelper.updateCustomTag(stack, tag -> tag.remove(TAG_ANCHOR_POS));
             return false;
         }
 

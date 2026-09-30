@@ -71,7 +71,7 @@ public class SetTagInTool implements IMessage
         final ItemStack stack = ctxIn.getSender().getInventory().getItem(slot);
         if (stack.getItem() == ModItems.tagTool.get())
         {
-            ItemStackNbtHelper.getOrCreateCustomTag(stack).putString(ItemTagTool.TAG_CURRENT_TAG, tag);
+            ItemStackNbtHelper.updateCustomTag(stack, itemTag -> itemTag.putString(ItemTagTool.TAG_CURRENT_TAG, tag));
         }
     }
 }

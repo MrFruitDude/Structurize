@@ -50,6 +50,27 @@ public class ScanToolData
     }
 
     /**
+     * Copies the slot storage (slots + current slot) into {@code target}, leaving its other keys alone.
+     * Needed since 1.20.5: this data wraps a copy of the item's custom data, so changes must be written back.
+     * @param target the item's custom data tag
+     */
+    public void writeTo(@NotNull final CompoundTag target)
+    {
+        for (final String key : new String[] {NBT_SLOTS, NBT_CURRENT})
+        {
+            final Tag value = this.tag.get(key);
+            if (value == null)
+            {
+                target.remove(key);
+            }
+            else
+            {
+                target.put(key, value.copy());
+            }
+        }
+    }
+
+    /**
      * Gets the currently selected slot number
      * @return the slot number
      */

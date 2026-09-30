@@ -132,7 +132,7 @@ public class WindowTagTool extends AbstractWindowSkeleton
     {
         super.close();
         currentTag = findPaneOfTypeByID(INPUT_FIELD, TextField.class).getText();
-        final CompoundTag itemTag = ItemStackNbtHelper.getOrCreateCustomTag(stack);
+        final CompoundTag itemTag = ItemStackNbtHelper.copyCustomTag(stack);
         itemTag.putString(ItemTagTool.TAG_CURRENT_TAG, currentTag);
         ItemStackNbtHelper.setCustomTag(stack, itemTag);
         Network.getNetwork().sendToServer(new SetTagInTool(currentTag, Minecraft.getInstance().player.getInventory().findSlotMatchingItem(stack)));

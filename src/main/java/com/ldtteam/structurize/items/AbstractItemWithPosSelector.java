@@ -70,7 +70,7 @@ public abstract class AbstractItemWithPosSelector extends Item
     public InteractionResult use(final Level worldIn, final Player playerIn, final InteractionHand handIn)
     {
         final ItemStack itemstack = playerIn.getItemInHand(handIn);
-        final CompoundTag compound = ItemStackNbtHelper.getOrCreateCustomTag(itemstack);
+        final CompoundTag compound = ItemStackNbtHelper.copyCustomTag(itemstack);
 
         if (!compound.contains(NBT_START_POS))
         {
@@ -113,7 +113,7 @@ public abstract class AbstractItemWithPosSelector extends Item
             context.getPlayer().sendSystemMessage(Component.translatable(END_POS_TKEY, pos.getX(), pos.getY(), pos.getZ()));
             Utils.playSuccessSound(context.getPlayer());
         }
-        BlockPosUtil.writeToNBT(ItemStackNbtHelper.getOrCreateCustomTag(context.getItemInHand()), NBT_END_POS, pos);
+        ItemStackNbtHelper.updateCustomTag(context.getItemInHand(), tag -> BlockPosUtil.writeToNBT(tag, NBT_END_POS, pos));
         return InteractionResult.SUCCESS;
     }
 
@@ -138,7 +138,7 @@ public abstract class AbstractItemWithPosSelector extends Item
         {
             itemstack = player.getOffhandItem();
         }
-        BlockPosUtil.writeToNBT(ItemStackNbtHelper.getOrCreateCustomTag(itemstack), NBT_START_POS, pos);
+        ItemStackNbtHelper.updateCustomTag(itemstack, tag -> BlockPosUtil.writeToNBT(tag, NBT_START_POS, pos));
         if (player.level().isClientSide())
         {
             Utils.playSuccessSound(player);
@@ -166,9 +166,11 @@ public abstract class AbstractItemWithPosSelector extends Item
                                  @NotNull final BlockPos start,
                                  @NotNull final BlockPos end)
     {
-        final CompoundTag tag = ItemStackNbtHelper.getOrCreateCustomTag(tool);
-        BlockPosUtil.writeToNBT(tag, NBT_START_POS, start);
-        BlockPosUtil.writeToNBT(tag, NBT_END_POS, end);
+        ItemStackNbtHelper.updateCustomTag(tool, tag ->
+        {
+            BlockPosUtil.writeToNBT(tag, NBT_START_POS, start);
+            BlockPosUtil.writeToNBT(tag, NBT_END_POS, end);
+        });
     }
 
     /**
@@ -178,7 +180,7 @@ public abstract class AbstractItemWithPosSelector extends Item
      */
     public static Tuple<BlockPos, BlockPos> getBounds(@NotNull final ItemStack tool)
     {
-        final CompoundTag tag = ItemStackNbtHelper.getOrCreateCustomTag(tool);
+        final CompoundTag tag = ItemStackNbtHelper.copyCustomTag(tool);
         final BlockPos start = BlockPosUtil.readFromNBT(tag, NBT_START_POS);
         final BlockPos end = BlockPosUtil.readFromNBT(tag, NBT_END_POS);
         return new Tuple<>(start, end);
