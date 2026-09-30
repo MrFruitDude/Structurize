@@ -7,6 +7,8 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import com.ldtteam.structurize.api.util.Tuple;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.*;
 import java.util.function.Function;
@@ -92,6 +94,35 @@ public interface IBlueprintDataProviderBE
 
         compoundNBT.putString(TAG_PACK, getPackName() == null ? "" : getPackName());
         compoundNBT.putString(TAG_PATH, getBlueprintPath() == null ? "" : getBlueprintPath());
+    }
+
+    /**
+     * Stores the schematic data under {@link #TAG_BLUEPRINTDATA} in the single-nested shape that blueprints,
+     * blueprint rotation and {@code BlueprintTagUtils} read.
+     */
+    default void storeSchematicData(final ValueOutput output)
+    {
+        final CompoundTag root = new CompoundTag();
+        writeSchematicDataToNBT(root);
+        output.store(TAG_BLUEPRINTDATA, CompoundTag.CODEC, root.getCompoundOrEmpty(TAG_BLUEPRINTDATA));
+    }
+
+    /**
+     * Reads the schematic data stored by {@link #storeSchematicData}. Also accepts the double-nested shape
+     * written by early 26.x port builds.
+     */
+    default void loadSchematicData(final ValueInput input)
+    {
+        input.read(TAG_BLUEPRINTDATA, CompoundTag.CODEC).ifPresent(data -> {
+            if (data.contains(TAG_BLUEPRINTDATA))
+            {
+                readSchematicDataFromNBT(data);
+                return;
+            }
+            final CompoundTag root = new CompoundTag();
+            root.put(TAG_BLUEPRINTDATA, data);
+            readSchematicDataFromNBT(root);
+        });
     }
 
     /**

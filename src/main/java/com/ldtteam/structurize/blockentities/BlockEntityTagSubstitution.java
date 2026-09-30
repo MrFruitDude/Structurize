@@ -129,10 +129,18 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
     protected void loadAdditional(@NotNull final ValueInput input)
     {
         super.loadAdditional(input);
-        input.read(IBlueprintDataProviderBE.TAG_BLUEPRINTDATA, CompoundTag.CODEC)
-            .ifPresent(IBlueprintDataProviderBE.super::readSchematicDataFromNBT);
+        loadSchematicData(input);
+        // Single-nested like blueprints and Blueprint#rotateWithMirror; ReplacementBlock(tag) expects the key on the root.
         this.replacement = input.read(ReplacementBlock.TAG_REPLACEMENT, CompoundTag.CODEC)
-            .<ReplacementBlock>map(ReplacementBlock::new)
+            .map(data -> {
+                if (data.contains(ReplacementBlock.TAG_REPLACEMENT))
+                {
+                    return new ReplacementBlock(data);
+                }
+                final CompoundTag root = new CompoundTag();
+                root.put(ReplacementBlock.TAG_REPLACEMENT, data);
+                return new ReplacementBlock(root);
+            })
             .orElse(new ReplacementBlock());
     }
 
@@ -140,10 +148,12 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
     protected void saveAdditional(@NotNull final ValueOutput output)
     {
         super.saveAdditional(output);
-        final CompoundTag schematicData = new CompoundTag();
-        writeSchematicDataToNBT(schematicData);
-        output.store(IBlueprintDataProviderBE.TAG_BLUEPRINTDATA, CompoundTag.CODEC, schematicData);
-        output.store(ReplacementBlock.TAG_REPLACEMENT, CompoundTag.CODEC, this.replacement.write(new CompoundTag()));
+        storeSchematicData(output);
+        final CompoundTag replacementData = this.replacement.write(new CompoundTag());
+        if (replacementData.contains(ReplacementBlock.TAG_REPLACEMENT))
+        {
+            output.store(ReplacementBlock.TAG_REPLACEMENT, CompoundTag.CODEC, replacementData.getCompoundOrEmpty(ReplacementBlock.TAG_REPLACEMENT));
+        }
     }
 
     @Override
