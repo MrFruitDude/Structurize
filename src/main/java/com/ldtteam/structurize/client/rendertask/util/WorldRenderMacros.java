@@ -12,6 +12,7 @@ import net.minecraft.gizmos.Gizmos;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.gizmos.TextGizmo;
 
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.core.BlockPos;
@@ -1076,10 +1077,11 @@ public class WorldRenderMacros extends UiRenderMacros
      * Call after a series of {@link #renderLineBox(PoseStack, BufferSourceCompat, AABB, float, int, boolean)}
      *
      * @param bufferSource buffer source
+     * @param collector    collector of the frame being built
      */
-    public static void endRenderLineBox(final BufferSourceCompat bufferSource)
+    public static void endRenderLineBox(final BufferSourceCompat bufferSource, final SubmitNodeCollector collector)
     {
-        bufferSource.endBatch();
+        bufferSource.endBatch(collector);
     }
 
     /**

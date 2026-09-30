@@ -43,7 +43,6 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.gizmos.GizmoStyle;
 import net.minecraft.gizmos.Gizmos;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
@@ -105,13 +104,25 @@ public class ClientEventSubscriber
         }
     }
 
+    /**
+     * Render tasks (box previews, timed block highlights) and the tag-tool overlay. Like the blueprint
+     * preview these must be submitted while the frame's feature nodes are collected.
+     */
     @SubscribeEvent
-    public static void renderAfterBlockFeatures(final RenderLevelStageEvent.AfterOpaqueFeatures event)
+    public static void submitRenderTasks(final SubmitCustomGeometryEvent event)
     {
-        WorldEventRenderContext.INSTANCE.renderWorldLastEvent(event);
-        renderTagTool(Minecraft.getInstance(), event.getPoseStack(), WorldRenderMacros.getBufferSource(),
-            Minecraft.getInstance().gameRenderer.mainCamera().position());
-        WorldRenderMacros.getBufferSource().endBatch();
+        final Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null)
+        {
+            return;
+        }
+
+        try (final Gizmos.TemporaryCollection ignored = mc.levelRenderer.collectPerFrameRenderThreadGizmos())
+        {
+            WorldEventRenderContext.INSTANCE.renderWorldLastEvent(event);
+            renderTagTool(mc, event.getPoseStack(), WorldRenderMacros.getBufferSource(), mc.gameRenderer.mainCamera().position());
+            WorldRenderMacros.getBufferSource().endBatch(event.getSubmitNodeCollector());
+        }
     }
 
     private static void renderTagTool(final Minecraft mc,

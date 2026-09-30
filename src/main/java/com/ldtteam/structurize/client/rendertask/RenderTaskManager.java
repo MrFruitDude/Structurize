@@ -40,7 +40,7 @@ public class RenderTaskManager
             {
                 final IRenderTask renderTask = renderTaskIterator.next();
 
-                if (renderTask.shouldRenderIn(context.stageEvent.getClass()))
+                if (renderTask.shouldRenderIn(context.stage))
                 {
                     renderTask.render(context);
                 }

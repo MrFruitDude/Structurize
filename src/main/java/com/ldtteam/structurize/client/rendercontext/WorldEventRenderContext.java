@@ -10,6 +10,7 @@ import com.ldtteam.structurize.client.rendertask.util.BufferSourceCompat;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 
 /**
  * Main class for handling world rendering.
@@ -24,7 +25,11 @@ public class WorldEventRenderContext
         // singleton
     }
 
-    public RenderLevelStageEvent stageEvent;
+    /**
+     * Stage the render tasks are run for. Tasks are submitted during {@link SubmitCustomGeometryEvent}
+     * but keep their 1.21 stage filter, which maps to the opaque-features pass.
+     */
+    public Class<? extends RenderLevelStageEvent> stage;
     public BufferSourceCompat     bufferSource;
     public PoseStack             poseStack;
     public float                 partialTicks;
@@ -39,12 +44,12 @@ public class WorldEventRenderContext
 
     public boolean isStage(final Class<? extends RenderLevelStageEvent> stageType)
     {
-        return stageType.isInstance(stageEvent);
+        return stageType.isAssignableFrom(stage);
     }
 
-    public void renderWorldLastEvent(final RenderLevelStageEvent event)
+    public void renderWorldLastEvent(final SubmitCustomGeometryEvent event)
     {
-        stageEvent = event;
+        stage = RenderLevelStageEvent.AfterOpaqueFeatures.class;
         bufferSource = WorldRenderMacros.getBufferSource();
         poseStack = event.getPoseStack();
         partialTicks = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
@@ -57,15 +62,10 @@ public class WorldEventRenderContext
         poseStack.pushPose();
         poseStack.translate(-cameraPos.x(), -cameraPos.y(), -cameraPos.z());
 
-        runRenderTasks(event);
+        RenderTaskManager.render(this);
 
-        bufferSource.endBatch();
+        bufferSource.endBatch(event.getSubmitNodeCollector());
 
         poseStack.popPose();
-    }
-
-    private void runRenderTasks(final RenderLevelStageEvent event)
-    {
-        RenderTaskManager.render(this);
     }
 }
