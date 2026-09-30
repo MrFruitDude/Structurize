@@ -9,6 +9,7 @@ import com.ldtteam.structurize.network.messages.IMessage;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.neoforged.fml.LogicalSide;
 import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
@@ -115,7 +116,7 @@ public class SplitPacketMessage implements IMessage
             //Create a new buffer that reads from the packet data and then deserialize the inner message.
             final ByteBuf buffer = Unpooled.wrappedBuffer(packetData);
             //Create a message.
-            final IMessage message = messageEntry.getCreator().apply(new FriendlyByteBuf(buffer));
+            final IMessage message = messageEntry.getCreator().apply(new RegistryFriendlyByteBuf(buffer, ctxIn.payload().player().registryAccess()));
             buffer.release();
 
             //Execute the message.

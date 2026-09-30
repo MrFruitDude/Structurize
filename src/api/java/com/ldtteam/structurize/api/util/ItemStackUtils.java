@@ -41,9 +41,6 @@ import java.util.stream.Collectors;
  */
 public final class ItemStackUtils
 {
-    private static final HolderLookup.Provider STATIC_REGISTRIES =
-        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
-
     /**
      * Private constructor to hide the implicit one.
      */
@@ -77,7 +74,7 @@ public final class ItemStackUtils
             compound.getIntOr("y", 0),
             compound.getIntOr("z", 0)
         );
-        final BlockEntity tileEntity = BlockEntity.loadStatic(blockpos, state, compound, STATIC_REGISTRIES);
+        final BlockEntity tileEntity = BlockEntity.loadStatic(blockpos, state, compound, RegistryLookups.current());
         if (tileEntity == null)
         {
             return Collections.emptyList();
@@ -108,7 +105,7 @@ public final class ItemStackUtils
         for (int i = 0; i < listtag.size(); ++i)
         {
             final CompoundTag compoundtag = listtag.getCompoundOrEmpty(i);
-            final DynamicOps<Tag> ops = STATIC_REGISTRIES.createSerializationContext(NbtOps.INSTANCE);
+            final DynamicOps<Tag> ops = RegistryLookups.current().createSerializationContext(NbtOps.INSTANCE);
             final ItemStack stack = ItemStack.CODEC.parse(ops, compoundtag)
                 .resultOrPartial(error -> { throw new IllegalArgumentException("Invalid item stack NBT: " + error); })
                 .orElse(ItemStack.EMPTY);
@@ -122,7 +119,7 @@ public final class ItemStackUtils
     }
 
     /**
-     * Parses an item stack from pre-26 NBT using the built-in registries.
+     * Parses an item stack from NBT using the live registries.
      */
     @NotNull
     public static ItemStack getItemStackFromNbt(@NotNull final CompoundTag compound)
@@ -132,7 +129,7 @@ public final class ItemStackUtils
             return ItemStack.EMPTY;
         }
 
-        return ItemStack.CODEC.parse(STATIC_REGISTRIES.createSerializationContext(NbtOps.INSTANCE), compound)
+        return ItemStack.CODEC.parse(RegistryLookups.current().createSerializationContext(NbtOps.INSTANCE), compound)
             .resultOrPartial(error -> Log.getLogger().warn("Invalid item stack NBT: {}", error))
             .orElse(ItemStack.EMPTY);
     }
@@ -149,7 +146,7 @@ public final class ItemStackUtils
         }
 
         return ItemStack.CODEC.encodeStart(
-                STATIC_REGISTRIES.createSerializationContext(NbtOps.INSTANCE), stack)
+                RegistryLookups.current().createSerializationContext(NbtOps.INSTANCE), stack)
             .resultOrPartial(error -> Log.getLogger().warn("Failed to encode item stack: {}", error))
             .map(tag -> tag instanceof CompoundTag compound ? compound : new CompoundTag())
             .orElseGet(CompoundTag::new);

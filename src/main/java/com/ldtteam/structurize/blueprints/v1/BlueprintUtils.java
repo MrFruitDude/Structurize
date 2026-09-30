@@ -98,7 +98,7 @@ public final class BlueprintUtils
                 Objects.requireNonNull(blockState),
                 compound,
                 beLevel == null
-                    ? net.minecraft.core.RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY)
+                    ? com.ldtteam.structurize.api.util.RegistryLookups.current()
                     : beLevel.registryAccess());
 
             if (entity != null)

@@ -315,7 +315,7 @@ public class TickedWorldOperation implements ITickedWorldOperation
                     {
                         final IPlacementHandler handler = PlacementHandlers.getHandler(world, BlockPos.ZERO, blockState);
                         final List<ItemStack> itemList =
-                          handler.getRequiredItems(world, here, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), new SimplePlacementContext(this.placer.getHandler().fancyPlacement(), this.placer.getHandler().getRotationMirror()));
+                          handler.getRequiredItems(world, here, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(world.registryAccess()), new SimplePlacementContext(this.placer.getHandler().fancyPlacement(), this.placer.getHandler().getRotationMirror()));
                         if (!itemList.isEmpty() && ItemStackUtils.compareItemStacksIgnoreStackSize(itemList.get(0), firstBlock))
                         {
                             isMatch = true;

@@ -102,7 +102,7 @@ public class BlueprintUtil
             final BlockEntity te = chunk.getBlockEntities().containsKey(mutablePos) && !chunk.getBlockEntities().get(mutablePos).isRemoved() ? chunk.getBlockEntity(mutablePos) : world.getBlockEntity(mutablePos.immutable());
             if (te != null)
             {
-                CompoundTag teTag = te.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+                CompoundTag teTag = te.saveWithFullMetadata(world.registryAccess());
                 teTag.putShort("x", x);
                 teTag.putShort("y", y);
                 teTag.putShort("z", z);

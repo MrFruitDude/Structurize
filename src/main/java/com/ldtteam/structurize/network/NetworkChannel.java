@@ -4,11 +4,14 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Maps;
 import com.ldtteam.structurize.api.util.Log;
+import com.ldtteam.structurize.api.util.RegistryLookups;
 import com.ldtteam.structurize.network.messages.*;
 import com.ldtteam.structurize.network.messages.splitting.SplitPacketMessage;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -178,15 +181,18 @@ public class NetworkChannel
         {
             throw new IllegalArgumentException("The message is unknown to this channel!");
         }
-        return new WrappedMessage(messageId, serialize(msg));
+        return new WrappedMessage(messageId, serialize(msg, RegistryLookups.current()));
     }
 
-    private byte[] serialize(final IMessage msg)
+    /**
+     * Messages are written into a registry-aware buffer so item stacks keep datapack-registry components (enchantments, ...).
+     */
+    private byte[] serialize(final IMessage msg, final RegistryAccess registries)
     {
         final ByteBuf buffer = Unpooled.buffer();
         try
         {
-            msg.toBytes(new FriendlyByteBuf(buffer));
+            msg.toBytes(new RegistryFriendlyByteBuf(buffer, registries));
             return Arrays.copyOf(buffer.array(), buffer.readableBytes());
         }
         finally
@@ -203,7 +209,8 @@ public class NetworkChannel
             throw new IllegalArgumentException("The message is unknown to this channel!");
         }
 
-        final byte[] data = serialize(msg);
+        final RegistryAccess registries = RegistryLookups.current();
+        final byte[] data = serialize(msg, registries);
         final int maxPacketSize = msg.getExecutionSide() == LogicalSide.SERVER ? 30000 : 943718;
         int currentIndex = 0;
         int packetIndex = 0;
@@ -221,7 +228,7 @@ public class NetworkChannel
                     packetIndex++,
                     currentIndex + length >= data.length,
                     messageId,
-                    packetData))));
+                    packetData), registries)));
             currentIndex += length;
         }
     }
@@ -229,7 +236,7 @@ public class NetworkChannel
     private void handleMessage(final int messageId, final byte[] data, final IPayloadContext neoContext)
     {
         final NetworkContext context = new NetworkContext(neoContext);
-        final FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.wrappedBuffer(data));
+        final FriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(data), neoContext.player().registryAccess());
         final IMessage message;
         try
         {

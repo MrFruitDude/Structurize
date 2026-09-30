@@ -1,8 +1,6 @@
 package com.ldtteam.structurize.util;
 
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -64,17 +62,24 @@ public final class ItemStackNbtHelper
 
     public static ItemStack readNetworkStack(final FriendlyByteBuf buf)
     {
-        final RegistryFriendlyByteBuf registryBuf = new RegistryFriendlyByteBuf(
-            buf,
-            RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
-        return ItemStack.OPTIONAL_STREAM_CODEC.decode(registryBuf);
+        return ItemStack.OPTIONAL_STREAM_CODEC.decode(registryBuf(buf));
     }
 
     public static void writeNetworkStack(final FriendlyByteBuf buf, final ItemStack stack)
     {
-        final RegistryFriendlyByteBuf registryBuf = new RegistryFriendlyByteBuf(
-            buf,
-            RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
-        ItemStack.OPTIONAL_STREAM_CODEC.encode(registryBuf, stack);
+        ItemStack.OPTIONAL_STREAM_CODEC.encode(registryBuf(buf), stack);
+    }
+
+    /**
+     * Structurize's network channel always hands messages a {@link RegistryFriendlyByteBuf} bound to the connection's registries,
+     * which item stacks need for enchantments, banner patterns and other datapack registries.
+     */
+    public static RegistryFriendlyByteBuf registryBuf(final FriendlyByteBuf buf)
+    {
+        if (buf instanceof final RegistryFriendlyByteBuf registryBuf)
+        {
+            return registryBuf;
+        }
+        throw new IllegalStateException("Item stacks need a registry-aware buffer; send this message through Structurize's NetworkChannel");
     }
 }

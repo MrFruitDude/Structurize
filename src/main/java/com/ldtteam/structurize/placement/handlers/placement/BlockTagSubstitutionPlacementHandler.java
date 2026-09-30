@@ -1,5 +1,6 @@
 package com.ldtteam.structurize.placement.handlers.placement;
 
+import com.ldtteam.structurize.api.util.RegistryLookups;
 import com.ldtteam.structurize.api.util.ItemStackUtils;
 import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.blockentities.BlockEntityTagSubstitution;
@@ -103,7 +104,7 @@ public class BlockTagSubstitutionPlacementHandler implements IPlacementHandler
                 BlockPos.ZERO,
                 blueprintState,
                 blockEntityData.getB(),
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)) instanceof BlockEntityTagSubstitution tagEntity)
+                RegistryLookups.current()) instanceof BlockEntityTagSubstitution tagEntity)
             {
                 try
                 {

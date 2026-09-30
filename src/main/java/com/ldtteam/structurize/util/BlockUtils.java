@@ -1,5 +1,6 @@
 package com.ldtteam.structurize.util;
 
+import com.ldtteam.structurize.api.util.RegistryLookups;
 import com.ldtteam.domumornamentum.entity.block.MateriallyTexturedBlockEntity;
 import com.ldtteam.structurize.api.util.ItemStackUtils;
 import com.ldtteam.structurize.api.util.Utils;
@@ -429,7 +430,7 @@ public final class BlockUtils
                 tag.putInt("x", worldEntity.getBlockPos().getX());
                 tag.putInt("y", worldEntity.getBlockPos().getY());
                 tag.putInt("z", worldEntity.getBlockPos().getZ());
-                return Utils.nbtContains(tag, worldEntity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)));
+                return Utils.nbtContains(tag, worldEntity.saveWithFullMetadata(worldEntity.getLevel() == null ? RegistryLookups.current() : worldEntity.getLevel().registryAccess()));
             }
             return true;
         }
@@ -550,7 +551,7 @@ public final class BlockUtils
         {
             final IPlacementHandler handler = PlacementHandlers.getHandler(world, BlockPos.ZERO, blockState);
             final List<ItemStack> itemList =
-              handler.getRequiredItems(world, position, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), new SimplePlacementContext(false, new PlacementSettings()));
+              handler.getRequiredItems(world, position, blockState, tileEntity == null ? null : tileEntity.saveWithFullMetadata(world.registryAccess()), new SimplePlacementContext(false, new PlacementSettings()));
             if (!itemList.isEmpty() && ItemStackUtils.compareItemStacksIgnoreStackSize(itemList.get(0), block))
             {
                 isMatch = true;

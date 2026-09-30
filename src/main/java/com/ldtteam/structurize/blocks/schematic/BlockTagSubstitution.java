@@ -54,7 +54,7 @@ public class BlockTagSubstitution extends BlockSubstitution implements IAnchorBl
         {
             stack.set(
                 DataComponents.CUSTOM_DATA,
-                CustomData.of(entity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY))));
+                CustomData.of(entity.saveWithFullMetadata(level.registryAccess())));
         }
         return stack;
     }

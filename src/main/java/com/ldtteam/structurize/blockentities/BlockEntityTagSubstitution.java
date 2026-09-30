@@ -1,5 +1,6 @@
 package com.ldtteam.structurize.blockentities;
 
+import com.ldtteam.structurize.api.util.RegistryLookups;
 import com.ldtteam.structurize.api.util.ItemStackUtils;
 import com.ldtteam.structurize.blockentities.interfaces.IBlueprintDataProviderBE;
 import com.ldtteam.structurize.blueprints.v1.Blueprint;
@@ -232,7 +233,7 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
             this.blockstate = blockstate;
             this.blockentitytag = blockentity == null
                 ? new CompoundTag()
-                : blockentity.saveWithFullMetadata(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+                : blockentity.saveWithFullMetadata(blockentity.getLevel() == null ? RegistryLookups.current() : blockentity.getLevel().registryAccess());
             this.itemstack = itemstack;
         }
 
@@ -329,7 +330,7 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
                         pos,
                         this.blockstate,
                         this.blockentitytag,
-                        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+                        RegistryLookups.current());
         }
 
         /**
