@@ -1,5 +1,6 @@
 package com.ldtteam.structurize.config;
 
+import com.ldtteam.common.config.LegacyConfigMigration;
 import com.ldtteam.structurize.config.AbstractConfiguration.ConfigWatcher;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -46,14 +47,14 @@ public class Configuration
     public Configuration(final ModContainer modContainer, final IEventBus modBus)
     {
         final Pair<ServerConfiguration, ModConfig> ser =
-            register(ServerConfiguration::new, ModConfig.Type.SYNCED, modContainer);
+            register(ServerConfiguration::new, ModConfig.Type.SYNCED, modContainer, modBus);
         server = ser.getRight();
         serverConfig = ser.getLeft();
 
         if (FMLEnvironment.getDist().isClient())
         {
             final Pair<ClientConfiguration, ModConfig> cli =
-                register(ClientConfiguration::new, ModConfig.Type.CLIENT, modContainer);
+                register(ClientConfiguration::new, ModConfig.Type.CLIENT, modContainer, modBus);
             client = cli.getRight();
             clientConfig = cli.getLeft();
 
@@ -76,7 +77,8 @@ public class Configuration
     private <T extends AbstractConfiguration> Pair<T, ModConfig> register(
         final Function<ModConfigSpec.Builder, T> factory,
         final ModConfig.Type type,
-        final ModContainer modContainer)
+        final ModContainer modContainer,
+        final IEventBus modBus)
     {
         if (type == ModConfig.Type.CLIENT && !FMLEnvironment.getDist().isClient())
         {
@@ -84,7 +86,9 @@ public class Configuration
         }
 
         final Pair<T, ModConfigSpec> built = new ModConfigSpec.Builder().configure(factory);
-        return Pair.of(built.getLeft(), ConfigTracker.INSTANCE.registerConfig(type, built.getRight(), modContainer));
+        final ModConfig modConfig = ConfigTracker.INSTANCE.registerConfig(type, built.getRight(), modContainer);
+        LegacyConfigMigration.migrate(modConfig, modBus);
+        return Pair.of(built.getLeft(), modConfig);
     }
 
     public ClientConfiguration getClient()
