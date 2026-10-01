@@ -35,7 +35,11 @@ public class TransferStructurePackToClient implements IMessage
     {
         this.packname = buf.readUtf(32767);
         this.eol = buf.readBoolean();
-        this.payload = Unpooled.wrappedBuffer(buf.readByteArray());
+        // Exact length prefix: the sender's buffer is growable, so its backing array is usually longer than its content.
+        final int size = buf.readInt();
+        final byte[] data = new byte[size];
+        buf.readBytes(data);
+        this.payload = Unpooled.wrappedBuffer(data);
     }
 
     /**
@@ -56,8 +60,10 @@ public class TransferStructurePackToClient implements IMessage
     {
         buf.writeUtf(this.packname);
         buf.writeBoolean(this.eol);
-        buf.writeByteArray(this.payload.array());
-        this.payload.release();
+        // Send only the written bytes: payload.array() is the whole backing array, including unused capacity past the writer index.
+        final int size = this.payload.readableBytes();
+        buf.writeInt(size);
+        buf.writeBytes(this.payload, this.payload.readerIndex(), size);
     }
 
     @Nullable
