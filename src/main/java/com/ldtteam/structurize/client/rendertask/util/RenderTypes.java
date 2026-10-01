@@ -7,12 +7,16 @@ import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.pipeline.CompareOp;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.renderpearl.api.vertex.VertexFormat;
+import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.function.Function;
 
 /**
@@ -24,6 +28,27 @@ public final class RenderTypes
     {
     }
 
+    /*
+     * Depth: since 26.1 the game renders with reversed depth (near = 1, cleared = 0); every vanilla world pipeline tests
+     * GREATER_THAN_OR_EQUAL. So 1.21's LEQUAL ("in front of blocks") is GREATER_THAN_OR_EQUAL here and its GREATER
+     * ("hidden behind blocks") is LESS_THAN.
+     */
+
+    /**
+     * Every custom pipeline used below. Since 1.21.5 a pipeline must be registered through RegisterRenderPipelinesEvent
+     * before it can be drawn, otherwise the first draw crashes the client ("Failed to find or load pipeline").
+     * Declared first so it exists before the render type fields below are initialised.
+     */
+    private static final List<RenderPipeline> PIPELINES = new ArrayList<>();
+
+    /**
+     * @return all custom pipelines of these render types, for RegisterRenderPipelinesEvent.
+     */
+    public static List<RenderPipeline> pipelines()
+    {
+        return Collections.unmodifiableList(PIPELINES);
+    }
+
     public static RenderType worldEntityIcon(final Identifier texture)
     {
         return WORLD_ENTITY_ICON.apply(texture);
@@ -33,7 +58,7 @@ public final class RenderTypes
         "structurize:lines_outside_blocks",
         com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.TRANSLUCENT,
-        CompareOp.LESS_THAN_OR_EQUAL,
+        CompareOp.GREATER_THAN_OR_EQUAL,
         false,
         true,
         1024);
@@ -42,7 +67,7 @@ public final class RenderTypes
         "structurize:lines_inside_blocks",
         com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.TRANSLUCENT,
-        CompareOp.GREATER_THAN,
+        CompareOp.LESS_THAN,
         false,
         true,
         1024);
@@ -69,7 +94,7 @@ public final class RenderTypes
         "structurize_lines",
         com.mojang.renderpearl.api.pipeline.PrimitiveTopology.DEBUG_LINES,
         BlendFunction.TRANSLUCENT,
-        CompareOp.LESS_THAN_OR_EQUAL,
+        CompareOp.GREATER_THAN_OR_EQUAL,
         false,
         false,
         1 << 14);
@@ -78,7 +103,7 @@ public final class RenderTypes
         "structurize_lines_with_width",
         com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.TRANSLUCENT,
-        CompareOp.LESS_THAN_OR_EQUAL,
+        CompareOp.GREATER_THAN_OR_EQUAL,
         true,
         true,
         1 << 13);
@@ -87,7 +112,7 @@ public final class RenderTypes
         "structurize_colored_triangles",
         com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES,
         BlendFunction.TRANSLUCENT,
-        CompareOp.LESS_THAN_OR_EQUAL,
+        CompareOp.GREATER_THAN_OR_EQUAL,
         true,
         true,
         1 << 13);
@@ -101,20 +126,28 @@ public final class RenderTypes
         false,
         1 << 12);
 
-    private static final Function<Identifier, RenderType> WORLD_ENTITY_ICON = Util.memoize(texture -> {
-        final RenderPipeline pipeline = RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
-            .withLocation(Identifier.fromNamespaceAndPath("structurize", "pipeline/entity_icon"))
-            .withVertexShader("core/position_tex")
-            .withFragmentShader("core/position_tex")
-            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
-            .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
-            .withPrimitiveTopology(com.mojang.renderpearl.api.pipeline.PrimitiveTopology.QUADS)
-            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
-            .build();
-        return RenderType.create(
-            "structurize:entity_icon",
-            RenderSetup.builder(pipeline).withTexture("Sampler0", texture).createRenderSetup());
-    });
+    private static final RenderPipeline ENTITY_ICON_PIPELINE = register(RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+        .withLocation(Identifier.fromNamespaceAndPath("structurize", "pipeline/entity_icon"))
+        .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+        .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+        .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+        .withVertexShader("core/position_tex")
+        .withFragmentShader("core/position_tex")
+        .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+        .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
+        .withPrimitiveTopology(com.mojang.renderpearl.api.pipeline.PrimitiveTopology.QUADS)
+        .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+        .build());
+
+    private static final Function<Identifier, RenderType> WORLD_ENTITY_ICON = Util.memoize(texture -> RenderType.create(
+        "structurize:entity_icon",
+        RenderSetup.builder(ENTITY_ICON_PIPELINE).withTexture("Sampler0", texture).createRenderSetup()));
+
+    private static RenderPipeline register(final RenderPipeline pipeline)
+    {
+        PIPELINES.add(pipeline);
+        return pipeline;
+    }
 
     private static RenderType positionColor(final String name,
         final com.mojang.renderpearl.api.pipeline.PrimitiveTopology mode,
@@ -124,8 +157,10 @@ public final class RenderTypes
         final boolean cull,
         final int bufferSize)
     {
-        final RenderPipeline pipeline = RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+        final RenderPipeline pipeline = register(RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
             .withLocation(Identifier.fromNamespaceAndPath("structurize", "pipeline/" + name.substring(name.indexOf(':') + 1)))
+            .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
             .withVertexShader("core/position_color")
             .withFragmentShader("core/position_color")
             .withColorTargetState(new ColorTargetState(blendFunction))
@@ -133,7 +168,7 @@ public final class RenderTypes
             .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
             .withPrimitiveTopology(mode)
             .withDepthStencilState(new DepthStencilState(depthTest, writeDepth))
-            .build();
+            .build());
         return RenderType.create(name, RenderSetup.builder(pipeline).createRenderSetup());
     }
 }

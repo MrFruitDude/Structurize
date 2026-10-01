@@ -19,11 +19,23 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 
 public class ClientLifecycleSubscriber
 {
+    /**
+     * Registers Structurize's overlay pipelines; unregistered pipelines crash the client on their first draw.
+     *
+     * @param event event
+     */
+    @SubscribeEvent
+    public static void onRegisterRenderPipelines(final RegisterRenderPipelinesEvent event)
+    {
+        com.ldtteam.structurize.client.rendertask.util.RenderTypes.pipelines().forEach(event::registerPipeline);
+    }
+
     /**
      * Called when client app is initialized.
      *
