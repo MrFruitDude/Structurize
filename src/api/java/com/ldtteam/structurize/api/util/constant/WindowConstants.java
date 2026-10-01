@@ -318,6 +318,11 @@ public final class WindowConstants
     public static final String REMOVE_FILTERED = "removefiltered";
 
     /**
+     * Build tool "show resources" button (upstream #699).
+     */
+    public static final String BUTTON_CONTENTS = "contents";
+
+    /**
      * Display visible blocks checkbox
      */
     public static final String VISIBLE_CHECKBOX = "showvisisble";

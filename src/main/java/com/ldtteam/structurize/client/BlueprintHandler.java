@@ -109,6 +109,15 @@ public final class BlueprintHandler
     }
 
     /**
+     * @return entities of the already built renderer for this preview (may become invalid), else an empty list
+     */
+    public java.util.List<net.minecraft.world.entity.Entity> getOptionalEntitiesForBlueprint(final BlueprintPreviewData previewData)
+    {
+        final BlueprintRenderer renderer = rendererCache.getIfPresent(previewData.getRenderKey());
+        return renderer == null ? java.util.List.of() : java.util.List.copyOf(renderer.getEntities());
+    }
+
+    /**
      * Draw a blueprint at list of given pos.
      *
      * @param previewData the blueprint and context to draw.

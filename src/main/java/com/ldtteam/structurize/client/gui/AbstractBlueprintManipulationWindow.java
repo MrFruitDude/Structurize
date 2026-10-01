@@ -13,6 +13,7 @@ import com.ldtteam.structurize.api.util.Utils;
 import com.ldtteam.structurize.api.util.constant.TranslationConstants;
 import com.ldtteam.structurize.blueprints.v1.Blueprint;
 import com.ldtteam.structurize.blueprints.v1.BlueprintTagUtils;
+import com.ldtteam.structurize.client.BlueprintHandler;
 import com.ldtteam.structurize.client.ModKeyMappings;
 import com.ldtteam.structurize.config.AbstractConfiguration;
 import com.ldtteam.structurize.network.messages.BuildToolPlacementMessage;
@@ -117,6 +118,7 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
         registerButton(BUTTON_ROTATE_RIGHT, this::rotateRightClicked);
         registerButton(BUTTON_ROTATE_LEFT, this::rotateLeftClicked);
         registerButton(BUTTON_SETTINGS, this::settingsClicked);
+        registerButton(BUTTON_CONTENTS, this::openContents);
 
         settingsList = findPaneOfTypeByID("settinglist", ScrollingList.class);
         placementOptionsList = findPaneOfTypeByID("placement", ScrollingList.class);
@@ -264,6 +266,21 @@ public abstract class AbstractBlueprintManipulationWindow extends AbstractWindow
         {
             findPaneOfTypeByID("tip", Text.class).setVisible(false);
         }
+        findPaneByID(BUTTON_CONTENTS).setVisible(RenderingCache.getOrCreateBlueprintPreviewData(bluePrintId).getBlueprint() != null);
+    }
+
+    /**
+     * Opens the blueprint contents list (upstream #699).
+     */
+    private void openContents()
+    {
+        final BlueprintPreviewData previewData = RenderingCache.getOrCreateBlueprintPreviewData(bluePrintId);
+        if (previewData.getBlueprint() == null)
+        {
+            return;
+        }
+        new WindowBlockGetterContents(previewData.getBlueprint(), Minecraft.getInstance().level,
+            BlueprintHandler.getInstance().getOptionalEntitiesForBlueprint(previewData)).openAsLayer();
     }
 
     @Override

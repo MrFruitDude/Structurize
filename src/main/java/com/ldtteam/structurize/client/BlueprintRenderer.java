@@ -76,6 +76,14 @@ public class BlueprintRenderer implements AutoCloseable
 
     private final BlueprintBlockAccess blockAccess;
     private final List<Entity> entities = new ArrayList<>();
+
+    /**
+     * @return the preview entities of this renderer (upstream #699 contents window)
+     */
+    List<Entity> getEntities()
+    {
+        return entities;
+    }
     private final List<BlockEntity> tileEntities = new ArrayList<>();
     private final List<MovingBlockRenderState> blockStates = new ArrayList<>();
     private final List<FluidInstance> fluidInstances = new ArrayList<>();

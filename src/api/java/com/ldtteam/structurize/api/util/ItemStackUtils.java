@@ -10,20 +10,18 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.decoration.ItemFrame;
-import net.minecraft.world.entity.vehicle.ContainerEntity;
-import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.decoration.GlowItemFrame;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.SpawnEggItem;
+import net.neoforged.neoforge.transfer.access.ItemAccess;
+import net.neoforged.neoforge.transfer.item.VanillaContainerWrapper;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import com.ldtteam.structurize.api.compat.itemhandler.IItemHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
@@ -34,6 +32,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -60,13 +59,9 @@ public final class ItemStackUtils
      */
     public static List<ItemStack> getItemStacksOfTileEntity(final CompoundTag compound, final BlockState state)
     {
-        if (state.getBlock() instanceof BaseEntityBlock && compound.contains("Items"))
+        if (compound == null)
         {
-            // because we're constructing the BlockEntity out-of-world below, chests (and perhaps a few others)
-            // can't generate an IItemHandler for us, so we need to read the contents manually.
-            // this could be removed if we always get a "real" BE from a world, but we're called both from a
-            // real world and from a schematic non-world, and the latter still breaks.
-            return getItemStacksFromNbt(compound);
+            return List.of();
         }
 
         BlockPos blockpos = new BlockPos(
@@ -75,25 +70,52 @@ public final class ItemStackUtils
             compound.getIntOr("z", 0)
         );
         final BlockEntity tileEntity = BlockEntity.loadStatic(blockpos, state, compound, RegistryLookups.current());
-        if (tileEntity == null)
-        {
-            return Collections.emptyList();
-        }
 
+        // PORT-26.3 (upstream #699): read contents through the block entity's own inventory, including nested contents
+        // (eg. a filled shulker box in a chest) and block entities that keep their items outside "Items" (decorated pot,
+        // jukebox). 1.21 queries item capabilities on a fake level for block entities that are no vanilla Container;
+        // the port only reaches capabilities when the block entity has a level, and otherwise falls back to "Items".
         final List<ItemStack> items = new ArrayList<>();
-        for (final IItemHandler handler : getItemHandlersFromProvider(tileEntity))
+        getItemHandlersFromProvider(tileEntity).forEach(handler -> deepExtractItemHandler(handler, items::add));
+        if (items.isEmpty() && compound.contains("Items") && (tileEntity == null || !(tileEntity instanceof Container)))
         {
-            for (int slot = 0; slot < handler.getSlots(); slot++)
-            {
-                final ItemStack stack = handler.getStackInSlot(slot);
-                if (!ItemStackUtils.isEmpty(stack))
-                {
-                    items.add(stack);
-                }
-            }
+            getItemStacksFromNbt(compound).forEach(stack -> deepExtractStack(stack, items::add));
+        }
+        return items;
+    }
+
+    /**
+     * Adds every non-empty stack of the handler to the sink, followed by the contents of each stack that itself holds
+     * items (shulker boxes, bundles), recursively.
+     *
+     * @param handler root handler to extract, may be null
+     * @param sink    receives copies of all found stacks
+     */
+    public static void deepExtractItemHandler(@Nullable final IItemHandler handler, final Consumer<ItemStack> sink)
+    {
+        if (handler == null)
+        {
+            return;
         }
 
-        return items;
+        for (int slot = 0; slot < handler.getSlots(); slot++)
+        {
+            deepExtractStack(handler.getStackInSlot(slot).copy(), sink);
+        }
+    }
+
+    private static void deepExtractStack(final ItemStack stack, final Consumer<ItemStack> sink)
+    {
+        if (ItemStackUtils.isEmpty(stack))
+        {
+            return;
+        }
+        sink.accept(stack);
+        final ResourceHandler<ItemResource> contents = stack.getCapability(Capabilities.Item.ITEM, ItemAccess.forStack(stack.copy()));
+        if (contents != null)
+        {
+            deepExtractItemHandler(IItemHandler.of(contents), sink);
+        }
     }
 
     @NotNull
@@ -158,41 +180,63 @@ public final class ItemStackUtils
      * @param provider The provider to get the IItemHandlers from.
      * @return A list with all the unique IItemHandlers a provider has.
      */
-    public static Set<IItemHandler> getItemHandlersFromProvider(final Object provider)
+    public static Set<IItemHandler> getItemHandlersFromProvider(@Nullable final Object provider)
     {
-        final Set<IItemHandler> handlerSet = new HashSet<>();
+        // PORT-26.3 (upstream #699): prefer the provider's whole inventory, so a sided capability cannot hide or
+        // duplicate slots.
+        if (provider instanceof final IItemHandler itemHandler)
+        {
+            return Set.of(itemHandler);
+        }
+        if (provider instanceof final Container container && (provider instanceof BlockEntity || provider instanceof Entity))
+        {
+            return Set.of(IItemHandler.of(VanillaContainerWrapper.of(container)));
+        }
         if (provider instanceof final BlockEntity blockEntity && blockEntity.getLevel() != null)
         {
+            final ResourceHandler<ItemResource> unsided = Capabilities.Item.BLOCK.getCapability(
+                blockEntity.getLevel(), blockEntity.getBlockPos(), blockEntity.getBlockState(), blockEntity, null);
+            if (unsided != null)
+            {
+                return Set.of(IItemHandler.of(unsided));
+            }
+
+            final Set<IItemHandler> handlerSet = new HashSet<>();
             for (final Direction side : Direction.values())
             {
-                addBlockHandler(handlerSet, blockEntity, side);
+                final ResourceHandler<ItemResource> handler = Capabilities.Item.BLOCK.getCapability(
+                    blockEntity.getLevel(), blockEntity.getBlockPos(), blockEntity.getBlockState(), blockEntity, side);
+                if (handler != null)
+                {
+                    handlerSet.add(IItemHandler.of(handler));
+                }
             }
-            addBlockHandler(handlerSet, blockEntity, null);
+            return handlerSet;
         }
-        else if (provider instanceof final Entity entity)
+        if (provider instanceof final Entity entity)
         {
-            final ResourceHandler<ItemResource> handler = Capabilities.Item.ENTITY.getCapability(entity, null);
+            ResourceHandler<ItemResource> handler = entity.getCapability(Capabilities.Item.ENTITY);
+            if (handler == null)
+            {
+                handler = entity.getCapability(Capabilities.Item.ENTITY_AUTOMATION, null);
+            }
             if (handler != null)
             {
-                handlerSet.add(IItemHandler.of(handler));
+                return Set.of(IItemHandler.of(handler));
             }
-        }
-        return handlerSet;
-    }
 
-    private static void addBlockHandler(
-        final Set<IItemHandler> handlers,
-        final BlockEntity blockEntity,
-        @Nullable final Direction side
-    )
-    {
-        final ResourceHandler<ItemResource> handler = Capabilities.Item.BLOCK.getCapability(
-            blockEntity.getLevel(), blockEntity.getBlockPos(), blockEntity.getBlockState(), blockEntity, side
-        );
-        if (handler != null)
-        {
-            handlers.add(IItemHandler.of(handler));
+            final Set<IItemHandler> handlerSet = new HashSet<>();
+            for (final Direction side : Direction.values())
+            {
+                final ResourceHandler<ItemResource> sided = entity.getCapability(Capabilities.Item.ENTITY_AUTOMATION, side);
+                if (sided != null)
+                {
+                    handlerSet.add(IItemHandler.of(sided));
+                }
+            }
+            return handlerSet;
         }
+        return Set.of();
     }
 
     /**
@@ -225,47 +269,94 @@ public final class ItemStackUtils
     }
 
     /**
-     * Get the list of required resources for entities.
+     * Get the list of required resources for entities: the item that spawns the entity, then its contents (including
+     * nested contents, eg. a shulker box in a chest minecart).
      *
      * @param entity the entity object.
-     * @param pos the placer pos..
+     * @param pos the placer pos (unused, kept for API compatibility).
      * @return a list of stacks.
      */
     public static List<ItemStack> getListOfStackForEntity(final Entity entity, final BlockPos pos)
     {
-        if (entity != null)
-        {
-            final List<ItemStack> request = new ArrayList<>();
-            if (entity instanceof ItemFrame)
-            {
-                final ItemStack stack = ((ItemFrame) entity).getItem();
-                if (!ItemStackUtils.isEmpty(stack))
-                {
-                    stack.setCount(1);
-                    request.add(stack);
-                }
-                request.add(new ItemStack(Items.ITEM_FRAME, 1));
-            }
-            else if (entity instanceof ArmorStand)
-            {
-                addIfPresent(request, entity.getPickResult());
-                if (entity instanceof final LivingEntity livingEntity)
-                {
-                    for (final EquipmentSlot slot : EquipmentSlot.VALUES)
-                    {
-                        addIfPresent(request, livingEntity.getItemBySlot(slot));
-                    }
-                }
-            }
-            else if (entity instanceof ContainerEntity containerEntity)
-            {
-                addIfPresent(request, entity.getPickResult());
-                request.addAll(containerEntity.getItemStacks());
-            }
+        return getListOfStackForEntity(entity);
+    }
 
-            return request.stream().filter(stack -> !stack.isEmpty()).collect(Collectors.toList());
+    /**
+     * Get the list of required resources for entities: the item that spawns the entity, then its contents (including
+     * nested contents, eg. a shulker box in a chest minecart). Mobs never require their spawn egg.
+     *
+     * @param entity the entity object.
+     * @return a list of stacks.
+     */
+    public static List<ItemStack> getListOfStackForEntity(@Nullable final Entity entity)
+    {
+        if (entity == null)
+        {
+            return List.of();
         }
-        return Collections.emptyList();
+
+        // PORT-26.3 (upstream #699): one implementation for every entity instead of the item frame / armor stand /
+        // container entity special cases, so glow item frames need a glow item frame and plain minecarts or boats
+        // need their item.
+        final List<ItemStack> request = new ArrayList<>();
+        final ItemStack spawnItem = getEntitySpawningItem(entity);
+        if (spawnItem != null && !(spawnItem.getItem() instanceof SpawnEggItem))
+        {
+            request.add(spawnItem);
+        }
+        request.addAll(getItemStacksOfEntity(entity));
+        return request.stream().filter(stack -> !stack.isEmpty()).collect(Collectors.toList());
+    }
+
+    /**
+     * Get the contents of an entity, including nested contents.
+     *
+     * @param entity the entity object.
+     * @return a list of stacks.
+     */
+    public static List<ItemStack> getItemStacksOfEntity(@Nullable final Entity entity)
+    {
+        if (entity == null)
+        {
+            return List.of();
+        }
+
+        final List<ItemStack> contents = new ArrayList<>();
+        final Set<IItemHandler> handlers = getItemHandlersFromProvider(entity);
+        if (!handlers.isEmpty())
+        {
+            handlers.forEach(handler -> deepExtractItemHandler(handler, contents::add));
+        }
+        // some vanilla entities hold an item without exposing an item capability
+        else if (entity instanceof final ItemFrame itemFrame)
+        {
+            deepExtractStack(itemFrame.getItem().copyWithCount(1), contents::add);
+        }
+        else if (entity instanceof final ItemEntity itemEntity)
+        {
+            deepExtractStack(itemEntity.getItem().copy(), contents::add);
+        }
+        return contents;
+    }
+
+    /**
+     * @return the item that places the given entity, or null if there is none
+     */
+    @Nullable
+    public static ItemStack getEntitySpawningItem(final Entity entity)
+    {
+        if (entity instanceof final ItemFrame itemFrame)
+        {
+            // 26.3 ItemFrame#getPickResult returns the framed item when there is one; the frame item itself is protected.
+            final ItemStack frame = new ItemStack(itemFrame instanceof GlowItemFrame ? Items.GLOW_ITEM_FRAME : Items.ITEM_FRAME);
+            if (itemFrame.hasCustomName())
+            {
+                frame.set(DataComponents.CUSTOM_NAME, itemFrame.getCustomName());
+            }
+            return frame;
+        }
+        final ItemStack picked = entity.getPickResult();
+        return picked == null ? null : picked.copy();
     }
 
     /**
@@ -349,13 +440,5 @@ public final class ItemStackUtils
             }
         }
         return false;
-    }
-
-    private static void addIfPresent(final List<ItemStack> stacks, @Nullable final ItemStack stack)
-    {
-        if (stack != null && !stack.isEmpty())
-        {
-            stacks.add(stack);
-        }
     }
 }
