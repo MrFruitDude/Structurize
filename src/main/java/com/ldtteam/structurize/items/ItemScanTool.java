@@ -543,7 +543,8 @@ public class ItemScanTool extends AbstractItemWithPosSelector implements IScroll
             return false;
         }
 
-        if (ItemStackNbtHelper.getCustomTag(stack) == null || !ItemStackNbtHelper.getCustomTag(stack).contains(NBT_COMMAND_POS))
+        final CompoundTag toolTag = ItemStackNbtHelper.copyCustomTag(stack);
+        if (!toolTag.contains(NBT_COMMAND_POS))
         {
             if (player.level().isClientSide())
             {
@@ -553,7 +554,8 @@ public class ItemScanTool extends AbstractItemWithPosSelector implements IScroll
             return false;
         }
 
-        if (!player.level().dimension().identifier().toString().equals(ItemStackNbtHelper.getCustomTag(stack).getString(NBT_DIMENSION)))
+        // 26.x: CompoundTag#getString returns an Optional, so compare against getStringOr.
+        if (!player.level().dimension().identifier().toString().equals(toolTag.getStringOr(NBT_DIMENSION, "")))
         {
             if (player.level().isClientSide())
             {
@@ -563,7 +565,7 @@ public class ItemScanTool extends AbstractItemWithPosSelector implements IScroll
             return false;
         }
 
-        final ScanToolData data = new ScanToolData(ItemStackNbtHelper.getCustomTag(stack));
+        final ScanToolData data = new ScanToolData(toolTag);
         final ScanToolData.Slot slot = data.getCurrentSlotData();
 
         if (slot.getBox().getPos1().equals(BlockPos.ZERO) && slot.getBox().getPos2().equals(BlockPos.ZERO))
@@ -576,7 +578,7 @@ public class ItemScanTool extends AbstractItemWithPosSelector implements IScroll
             return false;
         }
 
-        final BlockPos commandPos = BlockPosUtil.readFromNBT(ItemStackNbtHelper.copyCustomTag(stack), NBT_COMMAND_POS).above();
+        final BlockPos commandPos = BlockPosUtil.readFromNBT(toolTag, NBT_COMMAND_POS).above();
         final BlockPos buildPos = getTeleportPos(slot.getBox());
         final Level level = player.level();
 
