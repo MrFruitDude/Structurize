@@ -8,7 +8,7 @@ import com.ldtteam.structurize.network.messages.SyncPreviewCacheToServer;
 import com.ldtteam.structurize.storage.StructurePacks;
 import com.ldtteam.structurize.util.PlacementSettings;
 import com.ldtteam.structurize.util.RotationMirror;
-import net.minecraft.client.Minecraft;
+import com.ldtteam.structurize.client.ClientLevelAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.Mth;
@@ -374,7 +374,7 @@ public class BlueprintPreviewData
             return;
         }
 
-        blueprint.setRotationMirror(rotationMirror, Minecraft.getInstance().level);
+        blueprint.setRotationMirror(rotationMirror, ClientLevelAccess.level());
         renderKey = new RenderingCacheKey(rotationMirror, blueprint);
 
         syncChangesToServer();
