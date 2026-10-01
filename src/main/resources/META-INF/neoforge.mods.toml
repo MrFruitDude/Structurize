@@ -28,7 +28,7 @@ Allows you to:
 [[dependencies.structurize]]
     modId="minecraft"
     type="required"
-    versionRange="${minecraftRange}"
+    versionRange="${minecraft_range}"
     ordering="NONE"
     side="BOTH"
 [[dependencies.structurize]]
