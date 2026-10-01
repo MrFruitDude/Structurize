@@ -91,16 +91,9 @@ public class NetworkChannel
         registerMessage(++idx, ScanToolTeleportMessage.class, ScanToolTeleportMessage::new);
         registerMessage(++idx, AbsorbBlockMessage.class, AbsorbBlockMessage::new);
 
-        for (final Map.Entry<Integer, NetworkingMessageEntry<?>> entry : messagesTypes.entrySet())
-        {
-            final IPayloadHandler<WrappedMessage> handler =
-                (payload, context) -> handleMessage(payload.messageId(), payload.data(), context);
-            registrar.playBidirectional(
-                WrappedMessage.typeFor(entry.getKey()),
-                WrappedMessage.CODEC,
-                handler,
-                handler);
-        }
+        final IPayloadHandler<WrappedMessage> handler =
+            (payload, context) -> handleMessage(payload.messageId(), payload.data(), context);
+        registrar.playBidirectional(WrappedMessage.TYPE, WrappedMessage.CODEC, handler, handler);
     }
 
     private <MSG extends IMessage> void registerMessage(final int id,
@@ -209,9 +202,15 @@ public class NetworkChannel
             throw new IllegalArgumentException("The message is unknown to this channel!");
         }
 
-        final RegistryAccess registries = RegistryLookups.current();
-        final byte[] data = serialize(msg, registries);
+        final byte[] data = serialize(msg, RegistryLookups.current());
         final int maxPacketSize = msg.getExecutionSide() == LogicalSide.SERVER ? 30000 : 943718;
+        if (data.length <= maxPacketSize)
+        {
+            // Fits in one packet (including messages that write no bytes): send it directly, unsplit.
+            sender.accept(new WrappedMessage(messageId, data));
+            return;
+        }
+
         int currentIndex = 0;
         int packetIndex = 0;
         final int communicationId = messageCounter.getAndIncrement();
@@ -220,16 +219,44 @@ public class NetworkChannel
         {
             messagesTypes.get(messageId).onSplitting(packetIndex);
             final int length = Math.min(maxPacketSize, data.length - currentIndex);
-            final byte[] packetData = Arrays.copyOfRange(data, currentIndex, currentIndex + length);
-            sender.accept(new WrappedMessage(
-                0,
-                serialize(new SplitPacketMessage(
-                    communicationId,
-                    packetIndex++,
-                    currentIndex + length >= data.length,
-                    messageId,
-                    packetData), registries)));
+            sender.accept(new WrappedMessage(0, splitFrame(
+                communicationId,
+                packetIndex++,
+                currentIndex + length >= data.length,
+                messageId,
+                data,
+                currentIndex,
+                length)));
             currentIndex += length;
+        }
+    }
+
+    /**
+     * Writes one {@link SplitPacketMessage} frame straight from a slice of the serialized message.
+     */
+    private static byte[] splitFrame(final int communicationId,
+        final int packetIndex,
+        final boolean terminator,
+        final int innerMessageId,
+        final byte[] data,
+        final int offset,
+        final int length)
+    {
+        final ByteBuf buffer = Unpooled.buffer(length + 20);
+        try
+        {
+            final FriendlyByteBuf buf = new FriendlyByteBuf(buffer);
+            buf.writeVarInt(communicationId);
+            buf.writeVarInt(packetIndex);
+            buf.writeBoolean(terminator);
+            buf.writeVarInt(innerMessageId);
+            buf.writeVarInt(length);
+            buf.writeBytes(data, offset, length);
+            return Arrays.copyOf(buffer.array(), buffer.readableBytes());
+        }
+        finally
+        {
+            buffer.release();
         }
     }
 

@@ -1,7 +1,6 @@
 package com.ldtteam.structurize.network.messages.splitting;
 
 import com.google.common.collect.Maps;
-import com.google.common.primitives.Bytes;
 import com.ldtteam.structurize.Network;
 import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.network.NetworkChannel;
@@ -14,6 +13,8 @@ import net.neoforged.fml.LogicalSide;
 import com.ldtteam.structurize.network.NetworkContext;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
@@ -78,6 +79,28 @@ public class SplitPacketMessage implements IMessage
         buf.writeByteArray(this.payload);
     }
 
+    /**
+     * Joins the received chunks in packet-index order into one array, copying each chunk once.
+     */
+    public static byte[] assemble(final Map<Integer, byte[]> chunks)
+    {
+        final List<Map.Entry<Integer, byte[]>> ordered = new ArrayList<>(chunks.entrySet());
+        ordered.sort(Map.Entry.comparingByKey());
+        int size = 0;
+        for (final Map.Entry<Integer, byte[]> entry : ordered)
+        {
+            size += entry.getValue().length;
+        }
+        final byte[] result = new byte[size];
+        int offset = 0;
+        for (final Map.Entry<Integer, byte[]> entry : ordered)
+        {
+            System.arraycopy(entry.getValue(), 0, result, offset, entry.getValue().length);
+            offset += entry.getValue().length;
+        }
+        return result;
+    }
+
     @Nullable
     @Override
     public LogicalSide getExecutionSide()
@@ -104,11 +127,8 @@ public class SplitPacketMessage implements IMessage
 
             //No need to sync again, since we are now the last packet to arrive.
             //All data gets sorted and appended.
-            final byte[] packetData = Network.getNetwork().getMessageCache().get(this.communicationId, Maps::newConcurrentMap).entrySet()
-                                        .stream()
-                                        .sorted(Map.Entry.comparingByKey())
-                                        .map(Map.Entry::getValue)
-                                        .reduce(new byte[0], Bytes::concat);
+            final byte[] packetData = assemble(Network.getNetwork().getMessageCache().get(this.communicationId, Maps::newConcurrentMap));
+            Network.getNetwork().getMessageCache().invalidate(this.communicationId);
 
             //Grab the entry from the inner message id.
             final NetworkChannel.NetworkingMessageEntry<?> messageEntry = Network.getNetwork().getMessagesTypes().get(this.innerMessageId);
