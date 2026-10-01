@@ -9,7 +9,8 @@ import com.ldtteam.structurize.items.ItemStackTooltip;
 import com.ldtteam.structurize.storage.ClientStructurePackLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.packs.resources.ReloadableResourceManager;
+import com.ldtteam.structurize.api.util.constant.Constants;
+import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
@@ -48,27 +49,32 @@ public class ClientLifecycleSubscriber
         // the mod constructor can observe a null client and permanently skip all
         // local structure packs.
         ClientStructurePackLoader.onClientLoading();
+    }
 
-        final ResourceManager rm = Minecraft.getInstance().getResourceManager();
-        if (rm instanceof final ReloadableResourceManager resourceManager)
+    /**
+     * Registers the blueprint renderer cache reset with the sorted client reload listener list
+     * (upstream #855; registering on the resource manager directly is deprecated in NeoForge).
+     *
+     * @param event event
+     */
+    @SubscribeEvent
+    public static void onAddReloadListeners(final AddClientReloadListenersEvent event)
+    {
+        event.addListener(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "blueprint_render_cache"), new SimplePreparableReloadListener<>()
         {
-            resourceManager.registerReloadListener(new SimplePreparableReloadListener<>()
+            @Override
+            protected Object prepare(final ResourceManager manager, final ProfilerFiller profiler)
             {
+                return new Object();
+            }
 
-                @Override
-                protected Object prepare(final ResourceManager manager, final ProfilerFiller profiler)
-                {
-                    return new Object();
-                }
-
-                @Override
-                protected void apply(final Object source, final ResourceManager manager, final ProfilerFiller profiler)
-                {
-                    Log.getLogger().debug("Clearing blueprint renderer cache.");
-                    BlueprintHandler.getInstance().clearCache();
-                }
-            });
-        }
+            @Override
+            protected void apply(final Object source, final ResourceManager manager, final ProfilerFiller profiler)
+            {
+                Log.getLogger().debug("Clearing blueprint renderer cache.");
+                BlueprintHandler.getInstance().clearCache();
+            }
+        });
     }
 
     @SubscribeEvent
