@@ -1,6 +1,6 @@
 {
   "model": {
-    "type": "minecraft:model",
+    "type": "structurize:tag_substitution",
     "model": "structurize:item/blocktagsubstitution"
   }
 }

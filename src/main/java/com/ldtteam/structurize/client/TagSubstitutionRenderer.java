@@ -2,24 +2,16 @@ package com.ldtteam.structurize.client;
 
 import com.ldtteam.structurize.blockentities.BlockEntityTagSubstitution;
 import com.mojang.blaze3d.vertex.PoseStack;
-import java.util.ArrayList;
-import java.util.List;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
-import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 import net.minecraft.world.phys.Vec3;
 
@@ -57,6 +49,13 @@ public class TagSubstitutionRenderer implements BlockEntityRenderer<BlockEntityT
         state.partialTick = partialTick;
         state.replacement = entity.getReplacement();
         state.tilePos = entity.getTilePos();
+        // 1.21 drew the replacement's block model (with its block entity's model data) AND its block entity renderer.
+        state.geometry = state.replacement == null || state.tilePos == null
+            ? CapturedBlockGeometry.EMPTY
+            : CapturedBlockGeometry.collect(state.replacement,
+                entity.getLevel() instanceof net.minecraft.client.renderer.block.BlockAndTintGetter world ? world : null,
+                state.tilePos,
+                true);
     }
 
     @Override
@@ -74,17 +73,19 @@ public class TagSubstitutionRenderer implements BlockEntityRenderer<BlockEntityT
         poseStack.scale(0.98F, 0.98F, 0.98F);
         poseStack.translate(0.01F, 0.01F, 0.01F);
 
-        final BlockEntity replacementEntity = state.replacement.getBlockEntity(state.tilePos);
-        if (replacementEntity == null)
+        if (!state.geometry.parts().isEmpty())
         {
-            submitBlockModel(
-                state.replacement.getBlockState(),
+            collector.submitBlockModel(poseStack,
+                RenderTypes.translucentMovingBlock(),
+                state.geometry.parts(),
+                state.geometry.tints(),
                 state.lightCoords,
-                net.minecraft.client.renderer.rendertype.RenderTypes.translucentMovingBlock(),
-                poseStack,
-                collector);
+                OverlayTexture.NO_OVERLAY,
+                0);
         }
-        else
+
+        final BlockEntity replacementEntity = state.replacement.getBlockEntity(state.tilePos);
+        if (replacementEntity != null)
         {
             final BlockEntityRenderState nestedState = context.blockEntityRenderDispatcher()
                 .tryExtractRenderState(replacementEntity, state.partialTick, null, false);
@@ -92,35 +93,9 @@ public class TagSubstitutionRenderer implements BlockEntityRenderer<BlockEntityT
             {
                 context.blockEntityRenderDispatcher().submit(nestedState, poseStack, collector, camera);
             }
-            else
-            {
-                submitBlockModel(
-                    state.replacement.getBlockState(),
-                    state.lightCoords,
-                    net.minecraft.client.renderer.rendertype.RenderTypes.translucentMovingBlock(),
-                    poseStack,
-                    collector);
-            }
         }
 
         poseStack.popPose();
-    }
-
-    private static void submitBlockModel(final BlockState blockState,
-        final int packedLight,
-        @NotNull final RenderType renderType,
-        @NotNull final PoseStack poseStack,
-        @NotNull final SubmitNodeCollector collector)
-    {
-        if (blockState.getRenderShape() != RenderShape.MODEL)
-        {
-            return;
-        }
-
-        final BlockStateModel model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(blockState);
-        final List<BlockStateModelPart> parts = new ArrayList<>();
-        model.collectParts(BlockAndTintGetter.EMPTY, BlockPos.ZERO, blockState, RandomSource.create(42L), parts);
-        collector.submitBlockModel(poseStack, renderType, parts, new int[0], packedLight, 0, 0);
     }
 
     public static class State extends BlockEntityRenderState
@@ -128,5 +103,6 @@ public class TagSubstitutionRenderer implements BlockEntityRenderer<BlockEntityT
         private float partialTick;
         private BlockEntityTagSubstitution.ReplacementBlock replacement;
         private BlockPos tilePos;
+        private CapturedBlockGeometry geometry = CapturedBlockGeometry.EMPTY;
     }
 }

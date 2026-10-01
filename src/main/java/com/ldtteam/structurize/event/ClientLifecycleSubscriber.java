@@ -5,6 +5,7 @@ import com.ldtteam.structurize.client.*;
 import com.ldtteam.structurize.Structurize;
 import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.client.model.OverlaidModelLoader;
+import com.ldtteam.structurize.client.model.TagSubstitutionItemModel;
 import com.ldtteam.structurize.items.ItemStackTooltip;
 import com.ldtteam.structurize.storage.ClientStructurePackLoader;
 import net.minecraft.client.Minecraft;
@@ -19,6 +20,7 @@ import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
+import net.neoforged.neoforge.client.event.RegisterItemModelsEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -81,6 +83,17 @@ public class ClientLifecycleSubscriber
     public static void registerModelLoaders(final ModelEvent.RegisterLoaders event)
     {
         event.register(Identifier.fromNamespaceAndPath("structurize", "overlaid"), new OverlaidModelLoader());
+    }
+
+    /**
+     * Item model type of the tag substitution anchor, which also draws the absorbed block (1.21 drew it from the BEWLR).
+     *
+     * @param event event
+     */
+    @SubscribeEvent
+    public static void registerItemModels(final RegisterItemModelsEvent event)
+    {
+        event.register(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "tag_substitution"), TagSubstitutionItemModel.Unbaked.MAP_CODEC);
     }
 
     @SubscribeEvent
