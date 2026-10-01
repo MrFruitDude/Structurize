@@ -1,5 +1,6 @@
 package com.ldtteam.structurize.client.rendertask.util;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.util.ARGB;
 
@@ -48,6 +49,32 @@ public final class VertexRecorder implements VertexConsumer
     }
 
     /**
+     * Writes every recorded vertex into the given consumer, transforming positions and normals by the pose.
+     * Used to replay geometry that was recorded once in a local space (for example a cached blueprint mesh).
+     *
+     * @param target the consumer to replay into
+     * @param pose   the pose to apply
+     */
+    public void replay(final VertexConsumer target, final PoseStack.Pose pose)
+    {
+        for (int v = 0; v < vertexCount; v++)
+        {
+            final int base = v * STRIDE;
+            final int mask = data[base + O_MASK];
+            target.addVertex(pose, f(base + O_X), f(base + O_X + 1), f(base + O_X + 2));
+            replayElements(target, base, mask);
+            if ((mask & NORMAL) != 0)
+            {
+                target.setNormal(pose, f(base + O_NORMAL), f(base + O_NORMAL + 1), f(base + O_NORMAL + 2));
+            }
+            if ((mask & LINE_WIDTH) != 0)
+            {
+                target.setLineWidth(f(base + O_WIDTH));
+            }
+        }
+    }
+
+    /**
      * Writes every recorded vertex into the given consumer, in order.
      *
      * @param target the consumer to replay into
@@ -59,26 +86,7 @@ public final class VertexRecorder implements VertexConsumer
             final int base = v * STRIDE;
             final int mask = data[base + O_MASK];
             target.addVertex(f(base + O_X), f(base + O_X + 1), f(base + O_X + 2));
-            if ((mask & COLOR) != 0)
-            {
-                target.setColor(data[base + O_COLOR]);
-            }
-            if ((mask & UV0) != 0)
-            {
-                target.setUv(f(base + O_UV0), f(base + O_UV0 + 1));
-            }
-            if ((mask & UV1) != 0)
-            {
-                target.setUv1(data[base + O_UV1], data[base + O_UV1 + 1]);
-            }
-            if ((mask & UV2) != 0)
-            {
-                target.setUv2(data[base + O_UV2], data[base + O_UV2 + 1]);
-            }
-            if ((mask & UV3) != 0)
-            {
-                target.setUv3(f(base + O_UV3), f(base + O_UV3 + 1));
-            }
+            replayElements(target, base, mask);
             if ((mask & NORMAL) != 0)
             {
                 target.setNormal(f(base + O_NORMAL), f(base + O_NORMAL + 1), f(base + O_NORMAL + 2));
@@ -87,6 +95,30 @@ public final class VertexRecorder implements VertexConsumer
             {
                 target.setLineWidth(f(base + O_WIDTH));
             }
+        }
+    }
+
+    private void replayElements(final VertexConsumer target, final int base, final int mask)
+    {
+        if ((mask & COLOR) != 0)
+        {
+            target.setColor(data[base + O_COLOR]);
+        }
+        if ((mask & UV0) != 0)
+        {
+            target.setUv(f(base + O_UV0), f(base + O_UV0 + 1));
+        }
+        if ((mask & UV1) != 0)
+        {
+            target.setUv1(data[base + O_UV1], data[base + O_UV1 + 1]);
+        }
+        if ((mask & UV2) != 0)
+        {
+            target.setUv2(data[base + O_UV2], data[base + O_UV2 + 1]);
+        }
+        if ((mask & UV3) != 0)
+        {
+            target.setUv3(f(base + O_UV3), f(base + O_UV3 + 1));
         }
     }
 

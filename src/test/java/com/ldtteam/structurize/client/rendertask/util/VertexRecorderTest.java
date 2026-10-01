@@ -1,6 +1,8 @@
 package com.ldtteam.structurize.client.rendertask.util;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import org.joml.Quaternionf;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -49,6 +51,54 @@ public class VertexRecorderTest
     public void rejectsElementBeforeVertex()
     {
         new VertexRecorder().setColor(0xffffffff);
+    }
+
+    /**
+     * BS-S1: the cached blueprint mesh is recorded once in blueprint-local space and replayed each frame
+     * with that frame's camera-relative pose, so positions must be moved by the pose and normals rotated.
+     */
+    @Test
+    public void replaysThroughPose()
+    {
+        final VertexRecorder recorder = new VertexRecorder();
+        recorder.addVertex(1f, 2f, 3f).setColor(0xff00ff00).setUv(0.5f, 0.25f).setNormal(1f, 0f, 0f);
+
+        final PoseStack poseStack = new PoseStack();
+        poseStack.translate(10f, -20f, 30f);
+        poseStack.rotate(new Quaternionf().rotationY((float) Math.toRadians(90)));
+
+        final List<String> calls = new ArrayList<>();
+        recorder.replay(logging(calls), poseStack.last());
+
+        assertEquals(List.of("pos 13.0 -18.0 29.0", "color ff00ff00", "uv 0.5 0.25", "normal 0.0 0.0 -1.0"),
+            calls.stream().map(VertexRecorderTest::round).toList());
+    }
+
+    private static String round(final String call)
+    {
+        final StringBuilder out = new StringBuilder();
+        for (final String part : call.split(" "))
+        {
+            if (!out.isEmpty())
+            {
+                out.append(' ');
+            }
+            try
+            {
+                if (part.contains("."))
+                {
+                    final float value = Math.round(Float.parseFloat(part) * 1000f) / 1000f;
+                    out.append(value == 0f ? 0.0f : value);
+                    continue;
+                }
+            }
+            catch (final NumberFormatException ignored)
+            {
+                // not a number
+            }
+            out.append(part);
+        }
+        return out.toString();
     }
 
     private static VertexConsumer logging(final List<String> calls)

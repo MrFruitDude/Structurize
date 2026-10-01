@@ -6,6 +6,7 @@ import com.ldtteam.structurize.blocks.ModBlocks;
 import com.ldtteam.structurize.blueprints.v1.Blueprint;
 import com.ldtteam.structurize.blueprints.v1.BlueprintUtils;
 import com.ldtteam.structurize.client.fakelevel.BlueprintBlockAccess;
+import com.ldtteam.structurize.client.rendertask.util.VertexRecorder;
 import com.ldtteam.structurize.storage.rendering.types.BlueprintPreviewData;
 import com.ldtteam.structurize.tag.ModTags;
 import com.ldtteam.structurize.util.BlockInfo;
@@ -18,7 +19,9 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.block.BlockStateModelSet;
 import net.minecraft.client.renderer.block.FluidRenderer;
+import net.minecraft.client.renderer.block.FluidStateModelSet;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
@@ -60,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -87,6 +91,8 @@ public class BlueprintRenderer implements AutoCloseable
     private final List<BlockEntity> tileEntities = new ArrayList<>();
     private final List<MovingBlockRenderState> blockStates = new ArrayList<>();
     private final List<FluidInstance> fluidInstances = new ArrayList<>();
+    private final Map<RenderType, VertexRecorder> mesh = new LinkedHashMap<>();
+    private MeshKey meshKey;
     private long lastGameTime;
     private Set<Object> crashingObjects = Collections.newSetFromMap(new IdentityHashMap<>());
 
@@ -322,66 +328,115 @@ public class BlueprintRenderer implements AutoCloseable
         // current frame's feature dispatcher. A private SubmitNodeStorage is
         // never rendered and makes the preview silently disappear.
         final SubmitNodeCollector collector = ctx.getSubmitNodeCollector();
-        submitBlocks(minecraft, collector, poseStack, previewData);
-        submitFluids(minecraft, collector, poseStack);
-        submitEntities(minecraft, collector, poseStack, gameTime, partialTicks, suppressedExceptions);
-        submitBlockEntities(minecraft, collector, poseStack, anchorPos, gameTime, partialTicks);
+        submitMesh(minecraft, collector, poseStack, previewData);
+        final CameraRenderState cameraState = cameraState(minecraft);
+        submitEntities(minecraft, collector, poseStack, cameraState, gameTime, partialTicks, suppressedExceptions);
+        submitBlockEntities(minecraft, collector, poseStack, cameraState, anchorPos, gameTime, partialTicks);
 
         poseStack.popPose();
         lastGameTime = gameTime;
         return suppressedExceptions;
     }
 
-    private void submitBlocks(
+    /**
+     * Submits the cached block and fluid mesh. Like the 1.21 renderer, which baked the blueprint into vertex
+     * buffers once, the blueprint is tessellated only when its inputs change (see {@link MeshKey}); every frame
+     * just replays the recorded vertices, one submission per render type.
+     */
+    private void submitMesh(
         final Minecraft minecraft,
         final SubmitNodeCollector collector,
         final PoseStack poseStack,
         final BlueprintPreviewData previewData)
     {
-        final float previewAlpha = previewAlpha(previewData);
-        final boolean blendPreview = previewAlpha >= 0.0F && previewAlpha < TRANSPARENCY_THRESHOLD;
-        final ModelBlockRenderer translucentRenderer = blendPreview
-            ? new ModelBlockRenderer(minecraft.options.ambientOcclusion().get(), false, minecraft.getBlockColors())
-            : null;
+        final MeshKey key = new MeshKey(
+            previewAlpha(previewData),
+            minecraft.options.ambientOcclusion().get(),
+            minecraft.options.cutoutLeaves().get(),
+            minecraft.getModelManager().getBlockStateModelSet(),
+            minecraft.getModelManager().getFluidStateModelSet());
+        if (!key.equals(meshKey))
+        {
+            buildMesh(minecraft, key);
+            meshKey = key;
+        }
+
+        for (final Map.Entry<RenderType, VertexRecorder> entry : mesh.entrySet())
+        {
+            final VertexRecorder recorder = entry.getValue();
+            collector.submitCustomGeometry(poseStack, entry.getKey(), (pose, buffer) -> recorder.replay(buffer, pose));
+        }
+    }
+
+    private void buildMesh(final Minecraft minecraft, final MeshKey key)
+    {
+        mesh.clear();
+        final boolean blendPreview = key.alpha() >= 0.0F && key.alpha() < TRANSPARENCY_THRESHOLD;
+        final ModelBlockRenderer blockRenderer = new ModelBlockRenderer(key.ambientOcclusion(), false, minecraft.getBlockColors());
+        final PoseStack poseStack = new PoseStack();
 
         for (final MovingBlockRenderState state : blockStates)
         {
-            // MovingBlockFeatureRenderer tessellates a block at the origin of
-            // the submitted pose. The render state keeps the local position for
-            // lighting/model-data lookups, but it is not used as a translation.
-            // Apply the blueprint-local offset here or every block collapses at
-            // the anchor (and is effectively hidden by the terrain).
+            // Same layer choice as vanilla MovingBlockFeatureRenderer (what submitMovingBlock used), or one
+            // translucent layer with the preview alpha when the preview is transparent.
+            final boolean forceOpaque = ModelBlockRenderer.forceOpaque(key.cutoutLeaves(), state.blockState);
             final BlockPos blockPos = state.blockPos;
+            final BlockStateModel model = key.blockModels().get(state.blockState);
+            blockRenderer.tesselateBlock(
+                (x, y, z, quad, instance) -> {
+                    final ChunkSectionLayer layer;
+                    if (blendPreview)
+                    {
+                        instance.multiplyColor(ARGB.color(key.alpha(), -1));
+                        layer = ChunkSectionLayer.TRANSLUCENT;
+                    }
+                    else
+                    {
+                        layer = forceOpaque ? ChunkSectionLayer.SOLID : quad.materialInfo().layer();
+                    }
+                    poseStack.pushPose();
+                    // Blueprint-local position, plus the small legacy offset that avoids z-fighting with the
+                    // terrain when a preview is placed directly on existing blocks.
+                    poseStack.translate(blockPos.getX() + 0.01F + x, blockPos.getY() + 0.01F + y, blockPos.getZ() + 0.01F + z);
+                    mesh.computeIfAbsent(movingRenderType(layer), type -> new VertexRecorder())
+                        .putBakedQuad(poseStack.last(), quad, instance);
+                    poseStack.popPose();
+                },
+                0.0F,
+                0.0F,
+                0.0F,
+                state,
+                blockPos,
+                state.blockState,
+                model,
+                state.blockState.getSeed(state.randomSeedPos));
+        }
+
+        if (fluidInstances.isEmpty())
+        {
+            return;
+        }
+        final FluidRenderer fluidRenderer = new FluidRenderer(key.fluidModels());
+        final BlockAndTintGetter fluidLevel = new BlueprintBlockTintGetter();
+        for (final FluidInstance instance : fluidInstances)
+        {
+            final ChunkSectionLayer sectionLayer = key.fluidModels().get(instance.fluidState()).layer();
+            final VertexRecorder recorder = mesh.computeIfAbsent(movingRenderType(sectionLayer), type -> new VertexRecorder());
+            // FluidRenderer emits section-local coordinates (the same contract used by the old chunk-buffer
+            // wrapper). Translate by the section origin so fluids keep their blueprint-local position.
+            final BlockPos fluidPos = instance.pos();
             poseStack.pushPose();
-            // Retain the small legacy offset to avoid z-fighting with the
-            // terrain when a preview is placed directly on existing blocks.
-            poseStack.translate(blockPos.getX() + 0.01F, blockPos.getY() + 0.01F, blockPos.getZ() + 0.01F);
-            if (!blendPreview)
-            {
-                collector.submitMovingBlock(poseStack, state, 0);
-            }
-            else
-            {
-                final BlockStateModel model = minecraft.getModelManager().getBlockStateModelSet().get(state.blockState);
-                collector.submitCustomGeometry(
-                    poseStack,
-                    RenderTypes.translucentMovingBlock(),
-                    (pose, buffer) -> translucentRenderer.tesselateBlock(
-                        (x, y, z, quad, instance) -> {
-                            instance.multiplyColor(ARGB.color(previewAlpha, -1));
-                            final PoseStack.Pose translatedPose = pose.copy();
-                            translatedPose.translate(x, y, z);
-                            buffer.putBakedQuad(translatedPose, quad, instance);
-                        },
-                        0.0F,
-                        0.0F,
-                        0.0F,
-                        state,
-                        state.blockPos,
-                        state.blockState,
-                        model,
-                        state.blockState.getSeed(state.randomSeedPos)));
-            }
+            poseStack.translate(
+                fluidPos.getX() - (fluidPos.getX() & 15),
+                fluidPos.getY() - (fluidPos.getY() & 15),
+                fluidPos.getZ() - (fluidPos.getZ() & 15));
+            final PoseVertexConsumer consumer = new PoseVertexConsumer(poseStack.last(), recorder);
+            fluidRenderer.tesselate(
+                fluidLevel,
+                fluidPos,
+                layer -> layer == sectionLayer ? consumer : null,
+                instance.state(),
+                instance.fluidState());
             poseStack.popPose();
         }
     }
@@ -394,43 +449,6 @@ public class BlueprintRenderer implements AutoCloseable
             return override;
         }
         return Structurize.getConfig().getClient().rendererTransparency.get().floatValue();
-    }
-
-    private void submitFluids(
-        final Minecraft minecraft,
-        final SubmitNodeCollector collector,
-        final PoseStack poseStack)
-    {
-        if (fluidInstances.isEmpty())
-        {
-            return;
-        }
-
-        final FluidRenderer fluidRenderer = new FluidRenderer(minecraft.getModelManager().getFluidStateModelSet());
-        for (final FluidInstance instance : fluidInstances)
-        {
-            final ChunkSectionLayer sectionLayer = minecraft.getModelManager().getFluidStateModelSet()
-                .get(instance.fluidState()).layer();
-            final RenderType renderType = movingRenderType(sectionLayer);
-
-            final BlockAndTintGetter fluidLevel = new BlueprintBlockTintGetter();
-            // FluidRenderer emits section-local coordinates (the same contract
-            // used by the old chunk-buffer wrapper). Translate the pose by the
-            // section origin so fluids keep their blueprint-local position.
-            final BlockPos fluidPos = instance.pos();
-            final int sectionX = fluidPos.getX() - (fluidPos.getX() & 15);
-            final int sectionY = fluidPos.getY() - (fluidPos.getY() & 15);
-            final int sectionZ = fluidPos.getZ() - (fluidPos.getZ() & 15);
-            poseStack.pushPose();
-            poseStack.translate(sectionX, sectionY, sectionZ);
-            collector.submitCustomGeometry(poseStack, renderType, (pose, buffer) -> fluidRenderer.tesselate(
-                fluidLevel,
-                fluidPos,
-                layer -> layer == sectionLayer ? new PoseVertexConsumer(pose, buffer) : null,
-                instance.state(),
-                instance.fluidState()));
-            poseStack.popPose();
-        }
     }
 
     private RenderType movingRenderType(final ChunkSectionLayer layer)
@@ -447,6 +465,7 @@ public class BlueprintRenderer implements AutoCloseable
         final Minecraft minecraft,
         final SubmitNodeCollector collector,
         final PoseStack poseStack,
+        final CameraRenderState cameraState,
         final long gameTime,
         final float partialTicks,
         final Map<Object, Exception> suppressedExceptions)
@@ -469,7 +488,7 @@ public class BlueprintRenderer implements AutoCloseable
             try
             {
                 final EntityRenderState state = dispatcher.extractEntity(entity, partialTicks);
-                dispatcher.submit(state, cameraState(minecraft), entity.getX(), entity.getY(), entity.getZ(), poseStack, collector);
+                dispatcher.submit(state, cameraState, entity.getX(), entity.getY(), entity.getZ(), poseStack, collector);
             }
             catch (final ClassCastException | ReportedException exception)
             {
@@ -482,6 +501,7 @@ public class BlueprintRenderer implements AutoCloseable
         final Minecraft minecraft,
         final SubmitNodeCollector collector,
         final PoseStack poseStack,
+        final CameraRenderState cameraState,
         final BlockPos anchorPos,
         final long gameTime,
         final float partialTicks)
@@ -500,7 +520,7 @@ public class BlueprintRenderer implements AutoCloseable
             final BlockPos tePos = tileEntity.getBlockPos();
             poseStack.pushPose();
             poseStack.translate(tePos.getX(), tePos.getY(), tePos.getZ());
-            dispatcher.submit(state, poseStack, collector, cameraState(minecraft));
+            dispatcher.submit(state, poseStack, collector, cameraState);
             poseStack.popPose();
         }
     }
@@ -563,12 +583,43 @@ public class BlueprintRenderer implements AutoCloseable
         tileEntities.clear();
         blockStates.clear();
         fluidInstances.clear();
+        mesh.clear();
+        meshKey = null;
     }
 
     @Override
     public void close()
     {
         clearCachedState();
+    }
+
+    /**
+     * Everything the cached mesh depends on besides the blueprint itself; a change re-tessellates it.
+     * The model sets are replaced on every resource reload, so comparing them by identity catches reloads.
+     */
+    private record MeshKey(
+        float alpha,
+        boolean ambientOcclusion,
+        boolean cutoutLeaves,
+        BlockStateModelSet blockModels,
+        FluidStateModelSet fluidModels)
+    {
+        @Override
+        public boolean equals(final Object other)
+        {
+            return other instanceof final MeshKey key
+                && Float.compare(alpha, key.alpha) == 0
+                && ambientOcclusion == key.ambientOcclusion
+                && cutoutLeaves == key.cutoutLeaves
+                && blockModels == key.blockModels
+                && fluidModels == key.fluidModels;
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Float.hashCode(alpha) * 31 + System.identityHashCode(blockModels);
+        }
     }
 
     private record FluidInstance(BlockPos pos, BlockState state, FluidState fluidState)
