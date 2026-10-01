@@ -358,6 +358,37 @@ public class BlueprintUtil
         }
     }
 
+    /**
+     * Tag substitution blocks keep their replacement block inside their own block-entity data, which vanilla data fixers do not
+     * descend into. Convert Structurize 1.21's #704 "captured_block" layout to the port's "replacement" layout, then fix the
+     * nested block state (pre-26.x Name/Properties keys, renames), vanilla block entity and item stack from the blueprint's version.
+     */
+    private static CompoundTag fixTagSubstitution(final CompoundTag nbt, final int oldDataVersion)
+    {
+        final Optional<CompoundTag> captured = nbt.getCompound("captured_block");
+        if (captured.isPresent() && !nbt.contains("replacement"))
+        {
+            final CompoundTag replacement = new CompoundTag();
+            captured.get().getCompound("state").ifPresent(state -> replacement.put("b", state));
+            captured.get().getCompound("entity").filter(entity -> !entity.isEmpty()).ifPresent(entity -> replacement.put("e", entity));
+            captured.get().getCompound("item").ifPresent(item -> replacement.put("i", item));
+            nbt.remove("captured_block");
+            nbt.put("replacement", replacement);
+        }
+
+        nbt.getCompound("replacement").ifPresent(replacement -> {
+            replacement.getCompound("b")
+                .ifPresent(state -> replacement.put("b", DataFixerUtils.runDataFixer(state, References.BLOCK_STATE, oldDataVersion)));
+            replacement.getCompound("e")
+                .filter(entity -> entity.getStringOr("id", "").startsWith("minecraft:"))
+                .ifPresent(entity -> replacement.put("e", DataFixerUtils.runDataFixer(entity, References.BLOCK_ENTITY, oldDataVersion)));
+            replacement.getCompound("i")
+                .filter(item -> !item.isEmpty())
+                .ifPresent(item -> replacement.put("i", DataFixerUtils.runDataFixer(item, References.ITEM_STACK, oldDataVersion)));
+        });
+        return nbt;
+    }
+
     public static CompoundTag[] fixTileEntities(final int oldDataVersion, final ListTag tileEntitiesTag)
     {
         final CompoundTag[] tileEntities = new CompoundTag[tileEntitiesTag.size()];
@@ -369,6 +400,12 @@ public class BlueprintUtil
             try
             {
                 final String id = nbt.getStringOr("id", "");
+
+                if (id.equals(MOD_ID + ":tagsubstitution"))
+                {
+                    tileEntities[i] = fixTagSubstitution(nbt, oldDataVersion);
+                    continue;
+                }
 
                 if (id.contains("minecolonies"))
                 {

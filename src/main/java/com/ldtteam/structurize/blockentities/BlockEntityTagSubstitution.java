@@ -206,6 +206,7 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
     public static class ReplacementBlock
     {
         private static final String TAG_REPLACEMENT = "replacement";
+        private static final String TAG_CAPTURED_BLOCK = "captured_block";
 
         private final BlockState blockstate;
         private final CompoundTag blockentitytag;
@@ -258,12 +259,41 @@ public class BlockEntityTagSubstitution extends BlockEntity implements IBlueprin
          */
         public ReplacementBlock(@NotNull CompoundTag tag)
         {
-            final CompoundTag replacement = tag.getCompoundOrEmpty(TAG_REPLACEMENT);
-            this.blockstate = NbtUtils.readBlockState(BuiltInRegistries.BLOCK, replacement.getCompoundOrEmpty("b"));
+            final CompoundTag replacement;
+            if (!tag.contains(TAG_REPLACEMENT) && tag.contains(TAG_CAPTURED_BLOCK))
+            {
+                // Structurize 1.21 (#704) layout: captured_block:{state,entity,item}
+                final CompoundTag captured = tag.getCompoundOrEmpty(TAG_CAPTURED_BLOCK);
+                replacement = new CompoundTag();
+                replacement.put("b", captured.getCompoundOrEmpty("state"));
+                replacement.put("e", captured.getCompoundOrEmpty("entity"));
+                captured.getCompound("item").ifPresent(item -> replacement.put("i", item));
+            }
+            else
+            {
+                replacement = tag.getCompoundOrEmpty(TAG_REPLACEMENT);
+            }
+            this.blockstate = NbtUtils.readBlockState(BuiltInRegistries.BLOCK, modernStateKeys(replacement.getCompoundOrEmpty("b")));
             this.blockentitytag = replacement.getCompoundOrEmpty("e");
             this.itemstack = replacement.contains("i")
                 ? ItemStackUtils.getItemStackFromNbt(replacement.getCompoundOrEmpty("i"))
                 : ItemStack.EMPTY;
+        }
+
+        /**
+         * Data written before 26.x stores block states as {Name,Properties}; 26.x NbtUtils reads {id,properties}. Blueprints are
+         * data-fixed on load (BlueprintUtil), this covers replacement data reaching us any other way (items, saved block entities).
+         */
+        private static CompoundTag modernStateKeys(final CompoundTag state)
+        {
+            if (state.contains("id") || !state.contains("Name"))
+            {
+                return state;
+            }
+            final CompoundTag modern = new CompoundTag();
+            modern.putString("id", state.getStringOr("Name", ""));
+            state.getCompound("Properties").ifPresent(properties -> modern.put("properties", properties));
+            return modern;
         }
 
         /**
