@@ -12,6 +12,7 @@ import com.ldtteam.structurize.blueprints.v1.Blueprint;
 import com.ldtteam.structurize.client.BlueprintHandler;
 import com.ldtteam.structurize.client.BlueprintRenderer;
 import com.ldtteam.structurize.client.ModKeyMappings;
+import net.minecraft.nbt.CompoundTag;
 import com.ldtteam.structurize.client.gui.WindowExtendedBuildTool;
 import com.ldtteam.structurize.client.rendercontext.WorldEventRenderContext;
 import com.ldtteam.structurize.client.rendertask.RenderTaskManager;
@@ -132,12 +133,17 @@ public class ClientEventSubscriber
     {
         final Player player = mc.player;
         final ItemStack itemStack = player.getItemInHand(InteractionHand.MAIN_HAND);
-        if (itemStack.getItem() == ModItems.tagTool.get() && ItemStackNbtHelper.hasCustomTag(itemStack)
-            && ItemStackNbtHelper.getCustomTag(itemStack).contains(ItemTagTool.TAG_ANCHOR_POS))
+        if (itemStack.getItem() != ModItems.tagTool.get() || !ItemStackNbtHelper.hasCustomTag(itemStack))
+        {
+            return;
+        }
+        // Called every frame: copy the tool's tag once rather than once per read.
+        final CompoundTag toolTag = ItemStackNbtHelper.copyCustomTag(itemStack);
+        if (toolTag.contains(ItemTagTool.TAG_ANCHOR_POS))
         {
             Profiler.get().push("struct_tags");
 
-            final BlockPos tagAnchor = BlockPosUtil.readFromNBT(ItemStackNbtHelper.getCustomTag(itemStack), ItemTagTool.TAG_ANCHOR_POS);
+            final BlockPos tagAnchor = BlockPosUtil.readFromNBT(toolTag, ItemTagTool.TAG_ANCHOR_POS);
             final Vec3 realRenderRootVecd = Vec3.atLowerCornerOf(tagAnchor).subtract(viewPosition);
             final BlockEntity te = player.level().getBlockEntity(tagAnchor);
 

@@ -6,7 +6,6 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Consumer;
 
@@ -22,13 +21,6 @@ public final class ItemStackNbtHelper
     public static boolean hasCustomTag(final ItemStack stack)
     {
         return stack.has(DataComponents.CUSTOM_DATA);
-    }
-
-    @Nullable
-    public static CompoundTag getCustomTag(final ItemStack stack)
-    {
-        final CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        return customData == null ? null : customData.copyTag();
     }
 
     /**
