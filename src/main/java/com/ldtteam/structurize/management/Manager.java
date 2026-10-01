@@ -1,7 +1,6 @@
 package com.ldtteam.structurize.management;
 
 import com.ldtteam.structurize.Structurize;
-import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.api.util.Shape;
 import com.ldtteam.structurize.blueprints.v1.Blueprint;
 import com.ldtteam.structurize.operations.ITickedWorldOperation;
@@ -634,18 +633,8 @@ public final class Manager
     private static UUID generateOrRetrieveUUID()
     {
         final SavedDataStorage storage = ServerLifecycleHooks.getCurrentServer().overworld().getDataStorage();
-        final UUIDStorage loaded = storage.computeIfAbsent(UUIDStorage.TYPE);
-        if (loaded.getUUID() != null)
-        {
-            Manager.setServerUUID(loaded.getUUID());
-            return serverUUID;
-        }
-
-        final UUIDStorage created = new UUIDStorage(UUID.randomUUID());
-        storage.set(UUIDStorage.TYPE, created);
-        Manager.setServerUUID(created.getUUID());
-        Log.getLogger().info(String.format("New Server UUID %s", serverUUID));
-
+        // computeIfAbsent creates a storage with a random UUID and marks it dirty when none is saved yet.
+        Manager.setServerUUID(storage.computeIfAbsent(UUIDStorage.TYPE).getUUID());
         return serverUUID;
     }
 
