@@ -9,7 +9,7 @@ import com.ldtteam.common.util.BlockToItemHelper;
 import com.ldtteam.structurize.api.util.ItemStackUtils;
 import com.ldtteam.structurize.api.util.ItemStorage;
 import com.ldtteam.structurize.blueprints.v1.Blueprint;
-import com.ldtteam.structurize.client.fakelevel.SingleBlockFakeLevel.SidedSingleBlockFakeLevel;
+import com.ldtteam.common.fakelevel.SingleBlockFakeLevel.SidedSingleBlockFakeLevel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -42,8 +42,8 @@ public class WindowBlockGetterContents extends BOWindow
     {
         this(blueprint,
             realLevel,
-            new BlockPos(blueprint.getMinX(), blueprint.getMinBuildHeight(), blueprint.getMinZ()),
-            new BlockPos(blueprint.getMaxX() - 1, blueprint.getMaxY() - 1, blueprint.getMaxZ() - 1),
+            new BlockPos(blueprint.getMinX(), blueprint.getMinY(), blueprint.getMinZ()),
+            new BlockPos(blueprint.getMaxX(), blueprint.getMaxY(), blueprint.getMaxZ()),
             boundedEntities);
     }
 
