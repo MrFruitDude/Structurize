@@ -128,7 +128,7 @@ public abstract class AbstractItemWithPosSelector extends Item
         final BlockPos pos,
         final LivingEntity entity)
     {
-        if (!(entity instanceof final Player player) || !player.isShiftKeyDown())
+        if (!(entity instanceof final Player player))
         {
             return super.canDestroyBlock(selectedStack, state, worldIn, pos, entity);
         }
