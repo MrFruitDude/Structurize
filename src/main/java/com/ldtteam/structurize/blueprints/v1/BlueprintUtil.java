@@ -42,6 +42,13 @@ public class BlueprintUtil
 {
     public static final int DEFAULT_FIXER_IF_NOT_FOUND = DataVersion.v1_12_2.getDataVersion();
 
+    /**
+     * Vanilla block-entity ids that are no longer block entities. Vanilla's RemoveBlockEntityTagFix drops them from chunks, structures
+     * and items (beds: data version 4885, 26.x), but the standalone BLOCK_ENTITY fixer used for blueprint tile entities cannot convert
+     * them ("Unsupported key") and they then fail to load ("Skipping block entity with invalid type"). The blocks themselves stay.
+     */
+    private static final Set<String> REMOVED_BLOCK_ENTITIES = Set.of("minecraft:bed");
+
     public static final String NBT_OPTIONAL_DATA_TAG = "optional_data";
 
     /**
@@ -379,6 +386,10 @@ public class BlueprintUtil
         nbt.getCompound("replacement").ifPresent(replacement -> {
             replacement.getCompound("b")
                 .ifPresent(state -> replacement.put("b", DataFixerUtils.runDataFixer(state, References.BLOCK_STATE, oldDataVersion)));
+            if (replacement.getCompound("e").filter(entity -> REMOVED_BLOCK_ENTITIES.contains(entity.getStringOr("id", ""))).isPresent())
+            {
+                replacement.remove("e");
+            }
             replacement.getCompound("e")
                 .filter(entity -> entity.getStringOr("id", "").startsWith("minecraft:"))
                 .ifPresent(entity -> replacement.put("e", DataFixerUtils.runDataFixer(entity, References.BLOCK_ENTITY, oldDataVersion)));
@@ -412,6 +423,11 @@ public class BlueprintUtil
                     nbt.putString("id", id.toLowerCase(Locale.US));
                     nbt.putString("Item", nbt.getStringOr("Item", "").toLowerCase(Locale.US));
                     tileEntities[i] = nbt;
+                    continue;
+                }
+                if (REMOVED_BLOCK_ENTITIES.contains(id))
+                {
+                    tileEntities[i] = null;
                     continue;
                 }
                 // no longer a block entity, fixed in #fixCross1343()
