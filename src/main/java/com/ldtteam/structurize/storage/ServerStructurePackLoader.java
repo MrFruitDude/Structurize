@@ -69,13 +69,8 @@ public class ServerStructurePackLoader
         final List<String> modList = new ArrayList<>();
         for (IModInfo mod : ModList.get().getMods())
         {
-            // findFile only resolves regular files. Built-in structure packs
-            // are directories, so resolve them from the content roots instead.
-            modPaths.add(mod.getOwningFile().getFile().getContents().getContentRoots().stream()
-                .map(root -> root.resolve(BLUEPRINT_FOLDER).resolve(mod.getModId()))
-                .filter(Files::isDirectory)
-                .findFirst()
-                .orElse(null));
+            // Built-in packs are folders: in a dev run inside the content-root folder, in a packaged mod inside its jar.
+            modPaths.add(ModBlueprintFolders.find(mod));
             modList.add(mod.getModId());
         }
 
