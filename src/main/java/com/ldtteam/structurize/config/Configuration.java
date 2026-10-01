@@ -46,7 +46,7 @@ public class Configuration
     public Configuration(final ModContainer modContainer, final IEventBus modBus)
     {
         final Pair<ServerConfiguration, ModConfig> ser =
-            register(ServerConfiguration::new, ModConfig.Type.SERVER, modContainer);
+            register(ServerConfiguration::new, ModConfig.Type.SYNCED, modContainer);
         server = ser.getRight();
         serverConfig = ser.getLeft();
 
