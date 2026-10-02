@@ -20,6 +20,7 @@ public final class IrisPipelineCompat
     private static final String IRIS_MOD_ID = "iris";
     private static final String IRIS_API = "net.irisshaders.iris.api.v0.IrisApi";
     private static final String IRIS_PROGRAM = "net.irisshaders.iris.api.v0.IrisProgram";
+    private static final String IRIS_SHADOW_PROGRAM = "net.irisshaders.iris.api.v0.IrisShadowProgram";
 
     /**
      * Iris refuses a second assignment of the same pipeline, so only ever assign once.
@@ -45,15 +46,20 @@ public final class IrisPipelineCompat
 
         final Object api;
         final Method assign;
+        final Method assignShadow;
         final Class<?> programClass;
+        final Object shadowProgram;
         try
         {
             final Class<?> apiClass = Class.forName(IRIS_API);
             programClass = Class.forName(IRIS_PROGRAM);
+            final Class<?> shadowProgramClass = Class.forName(IRIS_SHADOW_PROGRAM);
             api = apiClass.getMethod("getInstance").invoke(null);
             assign = apiClass.getMethod("assignPipeline", RenderPipeline.class, programClass);
+            assignShadow = apiClass.getMethod("assignPipelineShadow", RenderPipeline.class, shadowProgramClass);
+            shadowProgram = programConstant(shadowProgramClass, "SHADOW");
         }
-        catch (final ReflectiveOperationException | LinkageError e)
+        catch (final ReflectiveOperationException | RuntimeException | LinkageError e)
         {
             Log.getLogger().warn("Iris is loaded but has no pipeline assignment API; Structurize overlays keep Iris' default handling", e);
             return;
@@ -65,6 +71,9 @@ public final class IrisPipelineCompat
             try
             {
                 assign.invoke(api, entry.getKey(), programConstant(programClass, entry.getValue()));
+                // Entity renderers (the citizen status icon) also draw during Iris' shadow pass, which has its own
+                // override list; without an entry there Iris again reports the pipeline as missing.
+                assignShadow.invoke(api, entry.getKey(), shadowProgram);
                 done++;
             }
             catch (final ReflectiveOperationException | RuntimeException | LinkageError e)
