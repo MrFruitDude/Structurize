@@ -37,6 +37,10 @@ public class ClientLifecycleSubscriber
     public static void onRegisterRenderPipelines(final RegisterRenderPipelinesEvent event)
     {
         com.ldtteam.structurize.client.rendertask.util.RenderTypes.pipelines().forEach(event::registerPipeline);
+        // Soft dependency: without these assignments a shader pack draws the overlays with the vanilla shader and the
+        // colony border disappears at distance. No-op unless Iris is installed.
+        com.ldtteam.structurize.client.compat.IrisPipelineCompat.assignPipelines(
+            com.ldtteam.structurize.client.rendertask.util.RenderTypes.irisPrograms());
     }
 
     /**

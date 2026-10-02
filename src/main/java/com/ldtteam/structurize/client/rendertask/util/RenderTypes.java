@@ -16,7 +16,9 @@ import net.minecraft.util.Util;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -42,11 +44,27 @@ public final class RenderTypes
     private static final List<RenderPipeline> PIPELINES = new ArrayList<>();
 
     /**
+     * Iris shader program (IrisProgram enum constant name) each custom pipeline draws with while a shader pack is active.
+     * Iris picks the program whose vertex format matches, so these must name a program that has a POSITION_COLOR /
+     * POSITION_TEX variant: BASIC (gbuffers_basic) and TEXTURED (gbuffers_textured). Iris' LINES program expects
+     * POSITION_COLOR_NORMAL_LINE_WIDTH and does not fit these pipelines.
+     */
+    private static final Map<RenderPipeline, String> IRIS_PROGRAMS = new LinkedHashMap<>();
+
+    /**
      * @return all custom pipelines of these render types, for RegisterRenderPipelinesEvent.
      */
     public static List<RenderPipeline> pipelines()
     {
         return Collections.unmodifiableList(PIPELINES);
+    }
+
+    /**
+     * @return every custom pipeline with the name of the Iris program it should be drawn with under a shader pack.
+     */
+    public static Map<RenderPipeline, String> irisPrograms()
+    {
+        return Collections.unmodifiableMap(IRIS_PROGRAMS);
     }
 
     public static RenderType worldEntityIcon(final Identifier texture)
@@ -137,15 +155,16 @@ public final class RenderTypes
         .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
         .withPrimitiveTopology(com.mojang.renderpearl.api.pipeline.PrimitiveTopology.QUADS)
         .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
-        .build());
+        .build(), "TEXTURED");
 
     private static final Function<Identifier, RenderType> WORLD_ENTITY_ICON = Util.memoize(texture -> RenderType.create(
         "structurize:entity_icon",
         RenderSetup.builder(ENTITY_ICON_PIPELINE).withTexture("Sampler0", texture).createRenderSetup()));
 
-    private static RenderPipeline register(final RenderPipeline pipeline)
+    private static RenderPipeline register(final RenderPipeline pipeline, final String irisProgram)
     {
         PIPELINES.add(pipeline);
+        IRIS_PROGRAMS.put(pipeline, irisProgram);
         return pipeline;
     }
 
@@ -168,7 +187,7 @@ public final class RenderTypes
             .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
             .withPrimitiveTopology(mode)
             .withDepthStencilState(new DepthStencilState(depthTest, writeDepth))
-            .build());
+            .build(), "BASIC");
         return RenderType.create(name, RenderSetup.builder(pipeline).createRenderSetup());
     }
 }
