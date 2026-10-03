@@ -5,7 +5,10 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * FX1: the extracted render states of a ghost's block entities or entities.
+ * FX1: the extracted render states of a ghost's block entities or entities. An owner outside the view frustum is not
+ * extracted at all; a static owner's state is extracted once per game tick and reused by the frames in between (its
+ * inputs only change on a tick: the preview ticks nothing it does not animate, and its light level is static); an
+ * animated owner is extracted every frame as before. A null state (nothing to draw) is remembered like any other.
  *
  * @param <T> the preview object (block entity or entity)
  * @param <S> its extracted render state
@@ -25,8 +28,25 @@ final class PreviewRenderStateCache<T, S>
      */
     S state(final T owner, final boolean visible, final long gameTime, final boolean perFrame, final Function<T, S> extractor)
     {
+        if (!visible)
+        {
+            return null;
+        }
+        if (!perFrame)
+        {
+            final Entry<S> entry = entries.get(owner);
+            if (entry != null && entry.gameTime() == gameTime)
+            {
+                return entry.state();
+            }
+        }
         extracts++;
-        return extractor.apply(owner);
+        final S state = extractor.apply(owner);
+        if (!perFrame)
+        {
+            entries.put(owner, new Entry<>(gameTime, state));
+        }
+        return state;
     }
 
     /**

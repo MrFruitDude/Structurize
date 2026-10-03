@@ -6,9 +6,13 @@ import com.mojang.renderpearl.api.pipeline.DepthStencilState;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.pipeline.CompareOp;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.textures.AddressMode;
+import com.mojang.renderpearl.api.textures.FilterMode;
 import com.mojang.renderpearl.api.vertex.VertexFormat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.resources.Identifier;
@@ -160,6 +164,47 @@ public final class RenderTypes
     private static final Function<Identifier, RenderType> WORLD_ENTITY_ICON = Util.memoize(texture -> RenderType.create(
         "structurize:entity_icon",
         RenderSetup.builder(ENTITY_ICON_PIPELINE).withTexture("Sampler0", texture).createRenderSetup()));
+
+    /*
+     * FX1: the unlit blueprint ghost. POSITION_TEX_COLOR over the block atlas, drawn with Iris' TEXTURED program under
+     * a shader pack. Iris only widens BLOCK, ENTITY, ENTITY_GLINT_SPECIAL and POSITION_TEX_LIGHTMAP_COLOR vertices
+     * (MixinBufferBuilder), so this format skips its per-quad normal/tangent/mid-block work, which is what kept a large
+     * ghost at ~24 fps under shaders. Depth like vanilla's translucent block pipeline (reversed-Z GREATER_THAN_OR_EQUAL,
+     * write); the translucent variant sorts on upload like vanilla's translucent moving block type.
+     */
+    private static final RenderPipeline GHOST_UNLIT_OPAQUE_PIPELINE = register(ghostUnlitPipeline("ghost_unlit_opaque", ColorTargetState.DEFAULT), "TEXTURED");
+    private static final RenderPipeline GHOST_UNLIT_TRANSLUCENT_PIPELINE =
+        register(ghostUnlitPipeline("ghost_unlit_translucent", new ColorTargetState(BlendFunction.TRANSLUCENT)), "TEXTURED");
+
+    public static final RenderType GHOST_UNLIT_OPAQUE = RenderType.create("structurize:ghost_unlit_opaque",
+        ghostUnlitSetup(GHOST_UNLIT_OPAQUE_PIPELINE).createRenderSetup());
+
+    public static final RenderType GHOST_UNLIT_TRANSLUCENT = RenderType.create("structurize:ghost_unlit_translucent",
+        ghostUnlitSetup(GHOST_UNLIT_TRANSLUCENT_PIPELINE).sortOnUpload().createRenderSetup());
+
+    private static RenderPipeline ghostUnlitPipeline(final String name, final ColorTargetState colorTarget)
+    {
+        return RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+            .withLocation(Identifier.fromNamespaceAndPath("structurize", "pipeline/" + name))
+            .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+            .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+            .withVertexShader("core/position_tex_color")
+            .withFragmentShader("core/position_tex_color")
+            .withColorTargetState(colorTarget)
+            .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
+            .withPrimitiveTopology(com.mojang.renderpearl.api.pipeline.PrimitiveTopology.QUADS)
+            .withDepthStencilState(DepthStencilState.DEFAULT)
+            .build();
+    }
+
+    private static RenderSetup.RenderSetupBuilder ghostUnlitSetup(final RenderPipeline pipeline)
+    {
+        return RenderSetup.builder(pipeline)
+            .withTexture("Sampler0", TextureAtlas.LOCATION_BLOCKS,
+                () -> RenderSystem.getSamplerCache()
+                    .getSampler(AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE, FilterMode.LINEAR, FilterMode.NEAREST, true));
+    }
 
     private static RenderPipeline register(final RenderPipeline pipeline, final String irisProgram)
     {

@@ -2,6 +2,7 @@ package com.ldtteam.structurize.config;
 
 import com.ldtteam.structurize.Network;
 import com.ldtteam.structurize.client.BlueprintHandler;
+import com.ldtteam.structurize.client.GhostRenderMode;
 import com.ldtteam.structurize.network.messages.SyncSettingsToServer;
 import com.ldtteam.structurize.storage.rendering.RenderingCache;
 import com.ldtteam.structurize.storage.rendering.types.BlueprintPreviewData;
@@ -10,6 +11,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.common.ModConfigSpec.BooleanValue;
 import net.neoforged.neoforge.common.ModConfigSpec.ConfigValue;
 import net.neoforged.neoforge.common.ModConfigSpec.DoubleValue;
+import net.neoforged.neoforge.common.ModConfigSpec.EnumValue;
 import net.neoforged.neoforge.common.ModConfigSpec.IntValue;
 
 /**
@@ -25,6 +27,12 @@ public class ClientConfiguration extends AbstractConfiguration
     public final BooleanValue displayShared;
     public final IntValue rendererLightLevel;
     public final DoubleValue rendererTransparency;
+    /** FX1: how the ghost mesh is drawn (system property structurize.ghost.mode overrides it). */
+    public final EnumValue<GhostRenderMode> ghostMode;
+    /** FX1: prepare the neighbouring rotations of a ghost being rotated (structurize.ghost.prewarm overrides it). */
+    public final BooleanValue ghostPrewarm;
+    /** FX1: skip off-screen ghost block entities/entities and reuse static states within a tick (structurize.ghost.extractCache overrides it). */
+    public final BooleanValue ghostExtractCache;
     public final BooleanValue scanToolScrolling;
 
     /**
@@ -44,6 +52,9 @@ public class ClientConfiguration extends AbstractConfiguration
         // Keep blueprint presets readable against the world by default.  A negative value
         // remains available for the legacy solid-preview behavior through the config UI.
         rendererTransparency = defineDouble(builder, "transparency", 0.4, -1, 1);
+        ghostMode = defineEnum(builder, "ghost_mode", GhostRenderMode.AUTO);
+        ghostPrewarm = defineBoolean(builder, "ghost_prewarm", true);
+        ghostExtractCache = defineBoolean(builder, "ghost_extract_cache", true);
 
         addWatcher(BlueprintHandler.getInstance()::clearCache, renderPlaceholdersNice, rendererLightLevel);
         addWatcher(displayShared, (oldValue, isSharingEnabled) -> {

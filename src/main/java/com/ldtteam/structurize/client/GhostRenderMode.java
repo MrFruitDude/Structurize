@@ -30,7 +30,12 @@ public enum GhostRenderMode
      */
     public static GhostRenderMode effective(final GhostRenderMode configured, final boolean shaderPackInUse)
     {
-        return LEGACY;
+        return switch (configured)
+        {
+            case UNLIT -> UNLIT;
+            case LEGACY -> LEGACY;
+            case AUTO -> shaderPackInUse ? UNLIT : LEGACY;
+        };
     }
 
     /**

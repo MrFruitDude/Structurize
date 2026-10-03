@@ -89,4 +89,61 @@ public final class IrisPipelineCompat
     {
         return Enum.valueOf((Class) programClass, name);
     }
+
+    /**
+     * FX1: Iris' API instance and its isShaderPackInUse method, resolved once; null when Iris is absent or unusable.
+     */
+    private static volatile Object shaderApi;
+    private static volatile Method shaderPackInUse;
+    private static volatile boolean shaderApiResolved = false;
+
+    /**
+     * FX1: whether an Iris shader pack is active right now. False when Iris is not installed. Cheap enough to call per
+     * frame (one reflective call once resolved); any Iris failure turns it permanently false.
+     */
+    public static boolean isShaderPackInUse()
+    {
+        if (!shaderApiResolved)
+        {
+            resolveShaderApi();
+        }
+        final Method method = shaderPackInUse;
+        if (method == null)
+        {
+            return false;
+        }
+        try
+        {
+            return (Boolean) method.invoke(shaderApi);
+        }
+        catch (final ReflectiveOperationException | RuntimeException | LinkageError e)
+        {
+            Log.getLogger().warn("Iris isShaderPackInUse failed; the blueprint ghost assumes no shader pack from now on", e);
+            shaderPackInUse = null;
+            return false;
+        }
+    }
+
+    private static synchronized void resolveShaderApi()
+    {
+        if (shaderApiResolved)
+        {
+            return;
+        }
+        try
+        {
+            if (ModList.get() != null && ModList.get().isLoaded(IRIS_MOD_ID))
+            {
+                final Class<?> apiClass = Class.forName(IRIS_API);
+                shaderApi = apiClass.getMethod("getInstance").invoke(null);
+                shaderPackInUse = apiClass.getMethod("isShaderPackInUse");
+            }
+        }
+        catch (final ReflectiveOperationException | RuntimeException | LinkageError e)
+        {
+            Log.getLogger().warn("Iris is loaded but its shader-pack state is unreadable; the blueprint ghost assumes no shader pack", e);
+            shaderPackInUse = null;
+        }
+        shaderApiResolved = true;
+    }
 }

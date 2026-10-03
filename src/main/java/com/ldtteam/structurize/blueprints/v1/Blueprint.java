@@ -573,6 +573,52 @@ public class Blueprint implements IFakeLevelBlockGetter
     }
 
     /**
+     * FX1: an independent copy in the current rotation/mirror, equal to this one (same name, file, path and pack),
+     * that can be rotated without touching this blueprint: the block and entity NBT is copied, because rotating
+     * rewrites block-entity positions in place. Used to prepare a neighbouring rotation of a preview ahead of time.
+     *
+     * @return the copy
+     */
+    public Blueprint copy()
+    {
+        final short[][][] structureCopy = new short[structure.length][][];
+        final CompoundTag[][][] tileEntitiesCopy = new CompoundTag[tileEntities.length][][];
+        for (int y = 0; y < structure.length; y++)
+        {
+            structureCopy[y] = new short[structure[y].length][];
+            tileEntitiesCopy[y] = new CompoundTag[tileEntities[y].length][];
+            for (int z = 0; z < structure[y].length; z++)
+            {
+                structureCopy[y][z] = structure[y][z].clone();
+                tileEntitiesCopy[y][z] = new CompoundTag[tileEntities[y][z].length];
+                for (int x = 0; x < tileEntities[y][z].length; x++)
+                {
+                    final CompoundTag tag = tileEntities[y][z][x];
+                    tileEntitiesCopy[y][z][x] = tag == null ? null : tag.copy();
+                }
+            }
+        }
+
+        final Blueprint copy = new Blueprint(sizeX, sizeY, sizeZ, palleteSize, new ArrayList<>(palette), structureCopy, new CompoundTag[0],
+            requiredMods == null ? null : new ArrayList<>(requiredMods));
+        copy.tileEntities = tileEntitiesCopy;
+        copy.entities = new CompoundTag[entities.length];
+        for (int i = 0; i < entities.length; i++)
+        {
+            copy.entities[i] = entities[i] == null ? null : entities[i].copy();
+        }
+        copy.name = name;
+        copy.fileName = fileName;
+        copy.filePath = filePath;
+        copy.packName = packName;
+        copy.architects = architects == null ? null : architects.clone();
+        copy.missingMods = missingMods == null ? null : missingMods.clone();
+        copy.rotationMirror = rotationMirror;
+        copy.cachePrimaryOffset = cachePrimaryOffset;
+        return copy;
+    }
+
+    /**
      * Get the primary block offset.
      * 
      * @return the cached offset or a freshly calculated one.

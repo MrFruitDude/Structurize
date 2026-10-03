@@ -96,7 +96,57 @@ public final class VertexRecorder implements VertexConsumer
      */
     public void replayUnlit(final VertexConsumer target, final PoseStack.Pose pose)
     {
-        replay(target, pose);
+        final Matrix4f matrix = pose.pose();
+        final boolean translationOnly = MatrixUtil.isPureTranslation(matrix);
+        final float tx = matrix.m30();
+        final float ty = matrix.m31();
+        final float tz = matrix.m32();
+        for (int v = 0; v < vertexCount; v++)
+        {
+            final int base = v * STRIDE;
+            final int mask = data[base + O_MASK];
+            if (translationOnly)
+            {
+                target.addVertex(f(base + O_X) + tx, f(base + O_X + 1) + ty, f(base + O_X + 2) + tz);
+            }
+            else
+            {
+                target.addVertex(pose, f(base + O_X), f(base + O_X + 1), f(base + O_X + 2));
+            }
+            if ((mask & UV0) != 0)
+            {
+                target.setUv(f(base + O_UV0), f(base + O_UV0 + 1));
+            }
+            if ((mask & COLOR) != 0)
+            {
+                final int color = data[base + O_COLOR];
+                target.setColor((mask & UV2) == 0 ? color : unlitColor(color, data[base + O_UV2], data[base + O_UV2 + 1]));
+            }
+        }
+    }
+
+    /**
+     * FX1: the recorded colour with the recorded light folded in, for the unlit ghost. Full light (block or sky 15,
+     * which is the preview renderer's default light level) keeps the colour; level 0 keeps a quarter of it so a dark
+     * preview stays readable. The face shade and ambient occlusion are already in the recorded colour.
+     *
+     * @param color the recorded ARGB colour
+     * @param block the recorded block light (uv2 u, 0..240)
+     * @param sky   the recorded sky light (uv2 v, 0..240)
+     * @return the colour to write
+     */
+    static int unlitColor(final int color, final int block, final int sky)
+    {
+        final int level = Math.min(15, Math.max(block, sky) >> 4);
+        if (level >= 15)
+        {
+            return color;
+        }
+        final float factor = 0.25F + 0.75F * level / 15F;
+        final int r = Math.round((color >> 16 & 0xFF) * factor);
+        final int g = Math.round((color >> 8 & 0xFF) * factor);
+        final int b = Math.round((color & 0xFF) * factor);
+        return color & 0xFF000000 | r << 16 | g << 8 | b;
     }
 
     /**

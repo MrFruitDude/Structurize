@@ -232,6 +232,37 @@ public class PreviewPrewarmTest
         assertEquals(RotationMirror.NONE.rotate(Rotation.COUNTERCLOCKWISE_90), prewarmer.next(armed, RotationMirror.NONE, true, armedCached::contains));
     }
 
+    @Test
+    public void aBlueprintCopyIsEqualButSharesNoMutableState()
+    {
+        final net.minecraft.nbt.CompoundTag te = new net.minecraft.nbt.CompoundTag();
+        te.putShort("x", (short) 1);
+        te.putShort("y", (short) 0);
+        te.putShort("z", (short) 2);
+        te.putString("id", "minecraft:chest");
+        final net.minecraft.nbt.CompoundTag entity = new net.minecraft.nbt.CompoundTag();
+        entity.putString("id", "minecraft:armor_stand");
+        final com.ldtteam.structurize.blueprints.v1.Blueprint hall = new com.ldtteam.structurize.blueprints.v1.Blueprint(
+            (short) 3, (short) 2, (short) 3, (short) 0, java.util.List.of(), new short[2][3][3], new net.minecraft.nbt.CompoundTag[] {te}, java.util.List.of())
+            .setName("townhall5").setPackName("Original").setFileName("townhall5");
+        hall.getStructure()[1][2][0] = 7;
+
+        final com.ldtteam.structurize.blueprints.v1.Blueprint copy = hall.copy();
+        assertEquals("same render-cache identity", hall, copy);
+        assertEquals(hall.hashCode(), copy.hashCode());
+        assertEquals(new RenderingCacheKey(RotationMirror.R90, hall), new RenderingCacheKey(RotationMirror.R90, copy));
+        assertEquals(hall.getRotationMirror(), copy.getRotationMirror());
+        assertEquals(7, copy.getStructure()[1][2][0]);
+        assertEquals("minecraft:chest", copy.getTileEntities()[0][2][1].getStringOr("id", ""));
+
+        // what a rotation of the copy does in place must not reach the original
+        copy.getStructure()[1][2][0] = 3;
+        copy.getTileEntities()[0][2][1].putInt("x", 99);
+        assertEquals(7, hall.getStructure()[1][2][0]);
+        assertEquals(1, hall.getTileEntities()[0][2][1].getShortOr("x", (short) -1));
+        assertNotSame(hall.getEntities(), copy.getEntities());
+    }
+
     private static Map<String, VertexRecorder> awaitInstalled(final PreviewMesh<PreviewMeshKey, String> mesh, final PreviewMeshKey key)
         throws InterruptedException
     {
