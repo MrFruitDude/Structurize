@@ -19,9 +19,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.block.BlockStateModelSet;
 import net.minecraft.client.renderer.block.FluidRenderer;
-import net.minecraft.client.renderer.block.FluidStateModelSet;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
@@ -63,7 +61,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -91,8 +88,7 @@ public class BlueprintRenderer implements AutoCloseable
     private final List<BlockEntity> tileEntities = new ArrayList<>();
     private final List<MovingBlockRenderState> blockStates = new ArrayList<>();
     private final List<FluidInstance> fluidInstances = new ArrayList<>();
-    private final Map<RenderType, VertexRecorder> mesh = new LinkedHashMap<>();
-    private MeshKey meshKey;
+    private final PreviewMesh<PreviewMeshKey, RenderType> mesh = new PreviewMesh<>();
     private long lastGameTime;
     private Set<Object> crashingObjects = Collections.newSetFromMap(new IdentityHashMap<>());
 
@@ -340,7 +336,7 @@ public class BlueprintRenderer implements AutoCloseable
 
     /**
      * Submits the cached block and fluid mesh. Like the 1.21 renderer, which baked the blueprint into vertex
-     * buffers once, the blueprint is tessellated only when its inputs change (see {@link MeshKey}); every frame
+     * buffers once, the blueprint is tessellated only when its inputs change (see {@link PreviewMeshKey}); every frame
      * just replays the recorded vertices, one submission per render type.
      */
     private void submitMesh(
@@ -349,28 +345,25 @@ public class BlueprintRenderer implements AutoCloseable
         final PoseStack poseStack,
         final BlueprintPreviewData previewData)
     {
-        final MeshKey key = new MeshKey(
+        final PreviewMeshKey key = new PreviewMeshKey(
             previewAlpha(previewData),
             minecraft.options.ambientOcclusion().get(),
             minecraft.options.cutoutLeaves().get(),
             minecraft.getModelManager().getBlockStateModelSet(),
             minecraft.getModelManager().getFluidStateModelSet());
-        if (!key.equals(meshKey))
-        {
-            buildMesh(minecraft, key);
-            meshKey = key;
-        }
 
-        for (final Map.Entry<RenderType, VertexRecorder> entry : mesh.entrySet())
+        // PF1: replay goes through VertexRecorder's translation-only fast path whenever the pose is the plain
+        // camera-relative offset (every frame unless CC is animating the ghost), so a frame costs one bulk vertex
+        // write per vertex and no per-vertex matrix/normal transform.
+        for (final Map.Entry<RenderType, VertexRecorder> entry : mesh.get(key, layers -> buildMesh(minecraft, key, layers)).entrySet())
         {
             final VertexRecorder recorder = entry.getValue();
             collector.submitCustomGeometry(poseStack, entry.getKey(), (pose, buffer) -> recorder.replay(buffer, pose));
         }
     }
 
-    private void buildMesh(final Minecraft minecraft, final MeshKey key)
+    private void buildMesh(final Minecraft minecraft, final PreviewMeshKey key, final Map<RenderType, VertexRecorder> mesh)
     {
-        mesh.clear();
         final boolean blendPreview = key.alpha() >= 0.0F && key.alpha() < TRANSPARENCY_THRESHOLD;
         final ModelBlockRenderer blockRenderer = new ModelBlockRenderer(key.ambientOcclusion(), false, minecraft.getBlockColors());
         final PoseStack poseStack = new PoseStack();
@@ -583,43 +576,13 @@ public class BlueprintRenderer implements AutoCloseable
         tileEntities.clear();
         blockStates.clear();
         fluidInstances.clear();
-        mesh.clear();
-        meshKey = null;
+        mesh.invalidate();
     }
 
     @Override
     public void close()
     {
         clearCachedState();
-    }
-
-    /**
-     * Everything the cached mesh depends on besides the blueprint itself; a change re-tessellates it.
-     * The model sets are replaced on every resource reload, so comparing them by identity catches reloads.
-     */
-    private record MeshKey(
-        float alpha,
-        boolean ambientOcclusion,
-        boolean cutoutLeaves,
-        BlockStateModelSet blockModels,
-        FluidStateModelSet fluidModels)
-    {
-        @Override
-        public boolean equals(final Object other)
-        {
-            return other instanceof final MeshKey key
-                && Float.compare(alpha, key.alpha) == 0
-                && ambientOcclusion == key.ambientOcclusion
-                && cutoutLeaves == key.cutoutLeaves
-                && blockModels == key.blockModels
-                && fluidModels == key.fluidModels;
-        }
-
-        @Override
-        public int hashCode()
-        {
-            return Float.hashCode(alpha) * 31 + System.identityHashCode(blockModels);
-        }
     }
 
     private record FluidInstance(BlockPos pos, BlockState state, FluidState fluidState)
