@@ -62,6 +62,7 @@ import net.minecraft.world.level.block.entity.TrialSpawnerBlockEntity;
 import net.minecraft.world.level.block.entity.vault.VaultBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.model.data.ModelData;
@@ -589,7 +590,7 @@ public class BlueprintRenderer implements AutoCloseable
 
             try
             {
-                final boolean visible = !cache || frustum.isVisible(entity.getBoundingBoxForCulling().move(cullOffset));
+                final boolean visible = !cache || frustum.isVisible(cullingBox(entity).move(cullOffset));
                 final EntityRenderState state =
                     entityStates.state(entity, visible, gameTime, !cache || ticking, e -> dispatcher.extractEntity(e, partialTicks));
                 if (state == null)
@@ -699,6 +700,21 @@ public class BlueprintRenderer implements AutoCloseable
         mesh.invalidate();
         blockEntityStates.clear();
         entityStates.clear();
+    }
+
+    /**
+     * FX1 #15: a preview entity's culling box (blueprint-local), like vanilla EntityRenderer.shouldRender: its bounding
+     * box inflated by half a block, or 2 blocks around it when the box is degenerate; one more half block of margin
+     * for models that overhang their box (item frame contents, armor stand poses).
+     */
+    private static AABB cullingBox(final Entity entity)
+    {
+        final AABB box = entity.getBoundingBox();
+        if (box.hasNaN() || box.getSize() == 0.0)
+        {
+            return new AABB(entity.getX() - 2.0, entity.getY() - 2.0, entity.getZ() - 2.0, entity.getX() + 2.0, entity.getY() + 2.0, entity.getZ() + 2.0);
+        }
+        return box.inflate(1.0);
     }
 
     /**
