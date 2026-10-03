@@ -2,7 +2,11 @@ package com.ldtteam.structurize.client.rendertask.util;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.MatrixUtil;
 import net.minecraft.util.ARGB;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.Arrays;
 
@@ -22,6 +26,8 @@ public final class VertexRecorder implements VertexConsumer
     private static final int UV3         = 1 << 5;
     private static final int NORMAL      = 1 << 6;
     private static final int LINE_WIDTH  = 1 << 7;
+    /** What putBakedQuad writes per vertex: position, colour, uv, overlay (uv1), light (uv2), normal. */
+    private static final int BAKED_QUAD  = POS | COLOR | UV0 | UV1 | UV2 | NORMAL;
 
     // Per-vertex layout (ints; floats stored as raw bits).
     private static final int O_MASK   = 0;
@@ -57,6 +63,13 @@ public final class VertexRecorder implements VertexConsumer
      */
     public void replay(final VertexConsumer target, final PoseStack.Pose pose)
     {
+        if (isTranslationOnly(pose))
+        {
+            final Matrix4f matrix = pose.pose();
+            replayTranslated(target, matrix.m30(), matrix.m31(), matrix.m32());
+            return;
+        }
+
         for (int v = 0; v < vertexCount; v++)
         {
             final int base = v * STRIDE;
@@ -72,6 +85,77 @@ public final class VertexRecorder implements VertexConsumer
                 target.setLineWidth(f(base + O_WIDTH));
             }
         }
+    }
+
+    /**
+     * PF1: whether replaying through this pose is a plain translation, which is what the blueprint ghost gets every
+     * frame (camera-relative anchor offset, no rotation or scale unless CC animates a glide or turn). Then every
+     * position is just offset and every normal passes through unchanged, so the per-vertex matrix and normal
+     * transforms of the full path can be skipped with the same result (up to the sign of a zero).
+     * Checked once per replay, not per vertex.
+     */
+    static boolean isTranslationOnly(final PoseStack.Pose pose)
+    {
+        if (!MatrixUtil.isPureTranslation(pose.pose()))
+        {
+            return false;
+        }
+        final Matrix3f n = pose.normal();
+        if (n.m00() != 1f || n.m11() != 1f || n.m22() != 1f
+            || n.m01() != 0f || n.m02() != 0f || n.m10() != 0f || n.m12() != 0f || n.m20() != 0f || n.m21() != 0f)
+        {
+            return false;
+        }
+        // A pose whose normals are not trusted renormalises every normal; that flag is private, so probe it with a
+        // non-unit vector: a trusted identity normal matrix hands it back unchanged.
+        return pose.transformNormal(2f, 0f, 0f, new Vector3f()).x() == 2f;
+    }
+
+    /**
+     * Replays with a translation-only pose. A vertex carrying exactly the baked-quad element set goes out as one
+     * bulk vertex call, the same call vanilla's putBakedQuad makes, which BufferBuilder writes directly for the BLOCK
+     * format; any other vertex goes out element by element as in the full path.
+     */
+    private void replayTranslated(final VertexConsumer target, final float tx, final float ty, final float tz)
+    {
+        for (int v = 0; v < vertexCount; v++)
+        {
+            final int base = v * STRIDE;
+            final int mask = data[base + O_MASK];
+            final float x = f(base + O_X) + tx;
+            final float y = f(base + O_X + 1) + ty;
+            final float z = f(base + O_X + 2) + tz;
+            if (mask == BAKED_QUAD)
+            {
+                target.addVertex(x, y, z,
+                    data[base + O_COLOR],
+                    f(base + O_UV0), f(base + O_UV0 + 1),
+                    packUv(base + O_UV1),
+                    packUv(base + O_UV2),
+                    f(base + O_NORMAL), f(base + O_NORMAL + 1), f(base + O_NORMAL + 2));
+                continue;
+            }
+
+            target.addVertex(x, y, z);
+            replayElements(target, base, mask);
+            if ((mask & NORMAL) != 0)
+            {
+                target.setNormal(f(base + O_NORMAL), f(base + O_NORMAL + 1), f(base + O_NORMAL + 2));
+            }
+            if ((mask & LINE_WIDTH) != 0)
+            {
+                target.setLineWidth(f(base + O_WIDTH));
+            }
+        }
+    }
+
+    /**
+     * Re-packs a uv pair stored by setUv1/setUv2 into the packed int the bulk call takes; the default
+     * setOverlay/setLight split it back into the same pair.
+     */
+    private int packUv(final int index)
+    {
+        return data[index + 1] << 16 | data[index] & 0xFFFF;
     }
 
     /**

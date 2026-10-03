@@ -1,7 +1,5 @@
 package com.ldtteam.structurize.client;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.ldtteam.structurize.api.util.Log;
 import com.ldtteam.structurize.storage.rendering.types.BlueprintPreviewData;
@@ -11,7 +9,6 @@ import net.minecraft.core.BlockPos;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The Blueprint render handler on the client side.
@@ -31,17 +28,8 @@ public final class BlueprintHandler
      */
     public static final int CACHE_EXPIRE_CHECK_SECONDS = CACHE_EXPIRE_SECONDS / 3;
 
-    private final LoadingCache<RenderingCacheKey, BlueprintRenderer> rendererCache = CacheBuilder.newBuilder()
-        .expireAfterAccess(CACHE_EXPIRE_SECONDS, TimeUnit.SECONDS)
-        .<RenderingCacheKey, BlueprintRenderer>removalListener(entry -> entry.getValue().close())
-        .build(new CacheLoader<>()
-        {
-            @Override
-            public BlueprintRenderer load(final RenderingCacheKey key)
-            {
-                return BlueprintRenderer.buildRendererForBlueprint(key.blueprint());
-            }
-        });
+    private final LoadingCache<RenderingCacheKey, BlueprintRenderer> rendererCache =
+        PreviewRendererCache.create(key -> BlueprintRenderer.buildRendererForBlueprint(key.blueprint()));
 
     /**
      * Private constructor to hide public one.
