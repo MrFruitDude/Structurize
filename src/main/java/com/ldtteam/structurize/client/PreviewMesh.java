@@ -5,6 +5,7 @@ import com.ldtteam.structurize.client.rendertask.util.VertexRecorder;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 /**
@@ -39,6 +40,26 @@ final class PreviewMesh<K, L>
             builds++;
         }
         return view;
+    }
+
+    /**
+     * FX1: tessellates the mesh for this key ahead of its first draw (a prewarmed neighbouring rotation).
+     *
+     * @param key      the inputs the mesh is built for
+     * @param builder  fills a fresh layer map; must not touch GL or the live level
+     * @param executor where the builder runs
+     */
+    void buildAsync(final K key, final Consumer<Map<L, VertexRecorder>> builder, final Executor executor)
+    {
+        get(key, builder);
+    }
+
+    /**
+     * @return whether a mesh is built and installed (a pending asynchronous build does not count)
+     */
+    boolean isBuilt()
+    {
+        return key != null;
     }
 
     /**

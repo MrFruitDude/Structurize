@@ -88,6 +88,18 @@ public final class VertexRecorder implements VertexConsumer
     }
 
     /**
+     * FX1: replays for an unlit POSITION_TEX_COLOR target (the ghost under a shader pack): position, uv0 and colour
+     * only, with the recorded light folded into the colour.
+     *
+     * @param target the consumer to replay into
+     * @param pose   the pose to apply
+     */
+    public void replayUnlit(final VertexConsumer target, final PoseStack.Pose pose)
+    {
+        replay(target, pose);
+    }
+
+    /**
      * PF1: whether replaying through this pose is a plain translation, which is what the blueprint ghost gets every
      * frame (camera-relative anchor offset, no rotation or scale unless CC animates a glide or turn). Then every
      * position is just offset and every normal passes through unchanged, so the per-vertex matrix and normal
