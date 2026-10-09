@@ -17,6 +17,7 @@ import com.ldtteam.structurize.storage.StructurePackMeta;
 import com.ldtteam.structurize.storage.StructurePacks;
 import com.ldtteam.structurize.util.IOPool;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.apache.commons.lang3.StringUtils;
@@ -204,11 +205,11 @@ public class WindowSwitchPack extends AbstractWindowSkeleton
             {
                 if (meta.size() == 2)
                 {
-                    drawableComponents.add(new PacksDrawableComponent(prevWindow, meta.get(0), meta.get(1)));
+                    drawableComponents.add(new PacksDrawableComponent(prevWindow, this, meta.get(0), meta.get(1)));
                 }
                 else
                 {
-                    drawableComponents.add(new PacksDrawableComponent(prevWindow, meta.get(0), null));
+                    drawableComponents.add(new PacksDrawableComponent(prevWindow, this, meta.get(0), null));
                 }
             }
         }
@@ -233,6 +234,7 @@ public class WindowSwitchPack extends AbstractWindowSkeleton
 
     private record PacksDrawableComponent(
         @NotNull Supplier<BOWindow> prevWindow,
+        @NotNull WindowSwitchPack window,
         @NotNull StructurePackMeta first,
         @Nullable StructurePackMeta second) implements DrawableComponent
     {
@@ -240,19 +242,22 @@ public class WindowSwitchPack extends AbstractWindowSkeleton
         public void render(final Pane rowPane)
         {
             rowPane.findPaneOfTypeByID("box1", Box.class).show();
-            fillForMeta(rowPane, first, "1");
+            fillForMeta(rowPane, first, "1", window);
 
             if (second != null)
             {
                 rowPane.findPaneOfTypeByID("box2", Box.class).show();
-                fillForMeta(rowPane, second, "2");
+                fillForMeta(rowPane, second, "2", window);
             }
         }
 
-        private void fillForMeta(final Pane rowPane, final StructurePackMeta packMeta, final String side)
+        private void fillForMeta(final Pane rowPane, final StructurePackMeta packMeta, final String side, final WindowSwitchPack window)
         {
             rowPane.findPaneOfTypeByID("name" + side, Text.class).setText(Component.literal(packMeta.getName()));
-            rowPane.findPaneOfTypeByID("desc" + side, Text.class).setText(Component.literal(packMeta.getDesc()));
+            final Text description = rowPane.findPaneOfTypeByID("desc" + side, Text.class);
+            description.setText(Component.literal(packMeta.getDesc()));
+            description.setTextScale(Math.max(0.6, 0.8 / window.getRenderType().calcRenderScale(Minecraft.getInstance().getWindow(), window)));
+            PaneBuilders.tooltipBuilder().append(Component.literal(packMeta.getDesc())).hoverPane(description).build();
             rowPane.findPaneOfTypeByID("authors" + side, Text.class).setText(Component.translatable(GUI_SWITCH_PACK_AUTHORS, String.join(", ", packMeta.getAuthors())));
             if (!packMeta.getIconPath().isEmpty())
             {
