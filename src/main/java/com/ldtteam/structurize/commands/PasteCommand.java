@@ -147,7 +147,10 @@ public class PasteCommand extends AbstractCommand
             return 0;
         }
 
-        final Blueprint blueprint = StructurePacks.getBlueprint(packName, path + ".blueprint", true);
+        // The command accepts an extensionless path, but hut setup persists a complete
+        // resource path for corners, upgrades and subsequent building lookups.
+        final String blueprintPath = path + ".blueprint";
+        final Blueprint blueprint = StructurePacks.getBlueprint(packName, blueprintPath, true);
         if (blueprint == null)
         {
             source.sendFailure(Component.translatable(NO_BLUEPRINT_MESSAGE));
@@ -161,7 +164,7 @@ public class PasteCommand extends AbstractCommand
         if (anchor.getBlock() instanceof ISpecialCreativeHandlerAnchorBlock)
         {
             if (!((ISpecialCreativeHandlerAnchorBlock) anchor.getBlock()).setup((ServerPlayer) player, world, pos, blueprint, new PlacementSettings(mirror, rotation),
-              pretty, packName, path))
+              pretty, packName, blueprintPath))
             {
                 return 0;
             }
