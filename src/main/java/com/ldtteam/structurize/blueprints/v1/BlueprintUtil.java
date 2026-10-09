@@ -463,7 +463,15 @@ public class BlueprintUtil
             {
                 final String id = nbt.getStringOr("id", "");
 
-                entities[i] = id.startsWith("minecraft:") ? DataFixerUtils.runDataFixer(nbt, References.ENTITY, oldDataVersion) : nbt;
+                final CompoundTag fixedEntity = id.startsWith("minecraft:")
+                                                  ? DataFixerUtils.runDataFixer(nbt, References.ENTITY, oldDataVersion)
+                                                  : nbt;
+                final LegacyArmorStandAttributeCompat.Result compatibility = LegacyArmorStandAttributeCompat.rewrite(fixedEntity);
+                entities[i] = compatibility.entity();
+                for (final String diagnostic : compatibility.diagnostics())
+                {
+                    LogManager.getLogger().warn("Blueprint reader: {}", diagnostic);
+                }
             }
             catch (Exception e)
             {
