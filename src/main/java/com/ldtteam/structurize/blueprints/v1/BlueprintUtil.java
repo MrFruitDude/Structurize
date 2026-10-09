@@ -638,11 +638,11 @@ public class BlueprintUtil
                 final int stateIndex = blocks[y][z][x];
                 if (stateIndex < 0 || stateIndex >= palette.size()) continue;
                 final String blockId = BuiltInRegistries.BLOCK.getKey(palette.get(stateIndex).getBlock()).toString();
-                final CompoundTag corrected = LegacyCampfireBlockEntityCompat.rewrite(tile, blockId);
+                final CompoundTag corrected = LegacyDecorativeBlockEntityCompat.rewrite(tile, blockId);
                 if (corrected != tile)
                 {
                     tileEntities[i] = corrected;
-                    Log.getLogger().info("Blueprint reader: repaired stale decorative Domum tile over vanilla campfire at {},{},{}", x, y, z);
+                    Log.getLogger().info("Blueprint reader: repaired stale decorative Domum tile over {} at {},{},{} (native tile {})", blockId, x, y, z, corrected == null ? "none" : corrected.getStringOr("id", ""));
                 }
             }
 
