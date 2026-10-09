@@ -629,6 +629,23 @@ public class BlueprintUtil
 
             // Reading Tile Entities
             CompoundTag[] tileEntities = fixTileEntities(oldDataVersion, (ListTag) tag.get("tile_entities"));
+            for (int i = 0; i < tileEntities.length; i++)
+            {
+                final CompoundTag tile = tileEntities[i];
+                if (tile == null) continue;
+                final int x = tile.getIntOr("x", -1), y = tile.getIntOr("y", -1), z = tile.getIntOr("z", -1);
+                if (x < 0 || y < 0 || z < 0 || x >= sizeX || y >= sizeY || z >= sizeZ) continue;
+                final int stateIndex = blocks[y][z][x];
+                if (stateIndex < 0 || stateIndex >= palette.size()) continue;
+                final String blockId = BuiltInRegistries.BLOCK.getKey(palette.get(stateIndex).getBlock()).toString();
+                final CompoundTag corrected = LegacyCampfireBlockEntityCompat.rewrite(tile, blockId);
+                if (corrected != tile)
+                {
+                    tileEntities[i] = corrected;
+                    Log.getLogger().info("Blueprint reader: repaired stale decorative Domum tile over vanilla campfire at {},{},{}", x, y, z);
+                }
+            }
+
 
             // Reading Entities
             CompoundTag[] entities = fixEntities(oldDataVersion, (ListTag) tag.get("entities"));
