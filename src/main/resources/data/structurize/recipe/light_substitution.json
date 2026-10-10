@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "WS ",
+    "SIS",
+    " SW"
+  ],
+  "key": {
+    "W": "#minecraft:logs",
+    "I": "minecraft:iron_ingot",
+    "S": "#c:rods/wooden"
+  },
+  "result": {
+    "id": "structurize:blocksubstitution",
+    "count": 32
+  }
+}
