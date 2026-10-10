@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "  I",
+    " SS",
+    "C N"
+  ],
+  "key": {
+    "I": "#c:ingots/iron",
+    "S": "#c:rods/wooden",
+    "C": "#minecraft:coals",
+    "N": "#c:nuggets/iron"
+  },
+  "result": {
+    "id": "structurize:caliper"
+  }
+}
