@@ -22,3 +22,16 @@ There are a few ways you can contribute!
 * Help translate Structurize on [Crowdin](https://crowdin.com/project/structurize).
 * Help with the documentation on our [wiki](https://wiki.minecolonies.ldtteam.com/) ([source](https://github.com/ldtteam/MinecoloniesWiki)).
 * Contribute to [MineColonies](https://github.com/ldtteam/minecolonies) development.
+
+
+### Building 26.3
+
+Requires JDK 25, Git, and GNU `timeout`.
+
+```sh
+bash .github/scripts/provision-local-deps.sh structurize
+source build/ci-local-deps.env
+./gradlew "-Dmaven.repo.local=$LOCAL_DEPS_MAVEN" build
+```
+
+Builds pinned BlockUI and Domum sources. Dependencies retain their local versions in an isolated Maven repository under `build/`. Revision pins are in the script.

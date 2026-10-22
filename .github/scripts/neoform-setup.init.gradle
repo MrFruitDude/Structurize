@@ -1,0 +1,8 @@
+// Backport NeoForged/NeoGradle a203b3428fe1 for the pinned dependency builds.
+// MC 26.x binary patches require no merger-added OnlyIn annotations.
+// The caller supplies InstallerTools 4.0.16; checksum verification stays enabled.
+allprojects {
+    tasks.matching { it.name == 'neoFormSetup' }.configureEach {
+        programArguments.add('--no-dist-annotations')
+    }
+}

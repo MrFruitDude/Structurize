@@ -1,0 +1,33 @@
+name: Gradle build with local port dependencies
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: "🏗️ Build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Select Java 25
+        shell: bash
+        run: echo "JAVA_HOME=${JAVA_HOME_25_X64:?Java 25 is required}" >> "$GITHUB_ENV"
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          gradle-version: wrapper
+      - name: Build pinned local dependencies
+        run: bash .github/scripts/provision-local-deps.sh structurize
+      - name: Build project
+        timeout-minutes: 15
+        env:
+          JAVA_TOOL_OPTIONS: -Xmx1g -XX:ActiveProcessorCount=2 -Djava.util.concurrent.ForkJoinPool.common.parallelism=2
+        run: >-
+          ./gradlew --max-workers=2 --no-parallel --no-daemon
+          '-Dorg.gradle.jvmargs=-Xmx1g -XX:ActiveProcessorCount=2'
+          "-Dmaven.repo.local=$LOCAL_DEPS_MAVEN" build
