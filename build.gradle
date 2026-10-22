@@ -29,6 +29,13 @@ tableau {
     }
 }
 
+// MC 26.x patches target jars without merger-added @OnlyIn annotations.
+// Backport NeoForged/NeoGradle a203b3428fe1 while Tableau pins 7.1.37.
+// Keep binary-patch checksum verification enabled.
+tasks.matching { it.name == 'neoFormSetup' }.configureEach {
+    programArguments.add('--no-dist-annotations')
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs.addAll(['-Xmaxerrs', '1000', '-Xmaxwarns', '1000'])
 }
